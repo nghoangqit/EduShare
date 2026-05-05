@@ -2,13 +2,55 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
+import '../services/firebase_data_service.dart';
 import '../utils/constants.dart';
 import '../utils/helpers.dart';
 
-class ProductCard extends StatelessWidget {
+class ProductCard extends StatefulWidget {
   final Product product;
 
   const ProductCard({super.key, required this.product});
+
+  @override
+  State<ProductCard> createState() => _ProductCardState();
+}
+
+class _ProductCardState extends State<ProductCard> {
+  final FirebaseDataService _dataService = FirebaseDataService.instance;
+  bool _favoriteLoading = true;
+  bool _isFavorite = false;
+
+  Product get product => widget.product;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFavoriteStatus();
+  }
+
+  Future<void> _loadFavoriteStatus() async {
+    final isFavorite = await _dataService.isFavorite(product.id);
+    if (!mounted) return;
+    setState(() {
+      _isFavorite = isFavorite;
+      _favoriteLoading = false;
+    });
+  }
+
+  Future<void> _toggleFavorite() async {
+    await _dataService.toggleFavorite(product);
+    if (!mounted) return;
+    setState(() {
+      _isFavorite = !_isFavorite;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(_isFavorite ? 'Da them vao yeu thich.' : 'Da xoa khoi yeu thich.'),
+        backgroundColor: AppColors.primary,
+        duration: const Duration(milliseconds: 900),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +62,7 @@ class ProductCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
+              color: Colors.black.withValues(alpha: 0.06),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -50,25 +92,38 @@ class ProductCard extends StatelessWidget {
                 ? Image.network(
                     product.imageUrl!,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Image.asset(imageForProductType(product.type), fit: BoxFit.cover),
+                    errorBuilder: (context, error, stackTrace) =>
+                        Image.asset(imageForProductType(product.type), fit: BoxFit.cover),
                   )
                 : Image.asset(imageForProductType(product.type), fit: BoxFit.cover),
           ),
         ),
         if (product.discount > 0) _badge('-${product.discount}%', AppColors.red),
-        if (product.isFree) _badge('Tặng', AppColors.primary),
-        if (product.isNew && product.discount == 0 && !product.isFree) _badge('Mới', AppColors.blue),
+        if (product.isFree) _badge('Tang', AppColors.primary),
+        if (product.isNew && product.discount == 0 && !product.isFree) _badge('Moi', AppColors.blue),
         Positioned(
           top: 8,
           right: 8,
-          child: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.94),
-              borderRadius: BorderRadius.circular(10),
+          child: GestureDetector(
+            onTap: _favoriteLoading ? null : _toggleFavorite,
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.94),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: _favoriteLoading
+                  ? const Padding(
+                      padding: EdgeInsets.all(8),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textGray),
+                    )
+                  : Icon(
+                      _isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                      size: 18,
+                      color: _isFavorite ? AppColors.red : AppColors.textGray,
+                    ),
             ),
-            child: const Icon(Icons.favorite_border_rounded, size: 18, color: AppColors.textGray),
           ),
         ),
       ],
@@ -102,7 +157,7 @@ class ProductCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: categoryColor(product.type).withOpacity(0.12),
+              color: categoryColor(product.type).withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(999),
             ),
             child: Text(
@@ -146,7 +201,7 @@ class ProductCard extends StatelessWidget {
           const Spacer(),
           if (product.isFree)
             const Text(
-              'Miễn phí',
+              'Mien phi',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.primary),
             )
           else
@@ -188,7 +243,7 @@ class ProductCard extends StatelessWidget {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(inCart ? 'Đã cập nhật giỏ hàng.' : 'Đã thêm vào giỏ hàng.'),
+                    content: Text(inCart ? 'Da cap nhat gio hang.' : 'Da them vao gio hang.'),
                     backgroundColor: AppColors.primary,
                     duration: const Duration(milliseconds: 900),
                   ),
@@ -202,7 +257,7 @@ class ProductCard extends StatelessWidget {
               elevation: 0,
             ),
             child: Text(
-              inCart ? 'Đã có trong giỏ' : 'Thêm vào giỏ',
+              inCart ? 'Da co trong gio' : 'Them vao gio',
               style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
             ),
           ),
@@ -260,7 +315,8 @@ class _ProductDetailSheet extends StatelessWidget {
                           ? Image.network(
                               product.imageUrl!,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Image.asset(imageForProductType(product.type), fit: BoxFit.cover),
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Image.asset(imageForProductType(product.type), fit: BoxFit.cover),
                             )
                           : Image.asset(imageForProductType(product.type), fit: BoxFit.cover),
                     ),
@@ -292,18 +348,18 @@ class _ProductDetailSheet extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
+                      color: Colors.green.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      'Tình trạng: ${product.condition}',
+                      'Tinh trang: ${product.condition}',
                       style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.w600),
                     ),
                   ),
                   const SizedBox(height: 18),
                   if (product.description != null && product.description!.trim().isNotEmpty) ...[
                     const Text(
-                      'Mô tả',
+                      'Mo ta',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppColors.textDark),
                     ),
                     const SizedBox(height: 8),
@@ -321,7 +377,7 @@ class _ProductDetailSheet extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            product.isFree ? 'Miễn phí' : Formatter.price(product.price),
+                            product.isFree ? 'Mien phi' : Formatter.price(product.price),
                             style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primary),
                           ),
                           if (product.originalPrice != null)
@@ -342,7 +398,7 @@ class _ProductDetailSheet extends StatelessWidget {
                             if (context.mounted) Navigator.pop(context);
                           },
                           icon: const Icon(Icons.shopping_cart_outlined, size: 18),
-                          label: const Text('Thêm vào giỏ'),
+                          label: const Text('Them vao gio'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,

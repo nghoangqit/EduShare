@@ -6,6 +6,10 @@ class UserProfile {
   String university;
   String avatarEmoji;
   String? avatarBase64;
+  String bankName;
+  String bankBin;
+  String bankAccountNumber;
+  String bankAccountHolder;
   int totalPurchases;
   int totalSales;
   double rating;
@@ -19,6 +23,10 @@ class UserProfile {
     required this.university,
     this.avatarEmoji = 'avatar',
     this.avatarBase64,
+    this.bankName = '',
+    this.bankBin = '',
+    this.bankAccountNumber = '',
+    this.bankAccountHolder = '',
     this.totalPurchases = 0,
     this.totalSales = 0,
     this.rating = 0.0,
@@ -34,6 +42,10 @@ class UserProfile {
       university: map['university'] as String? ?? '',
       avatarEmoji: map['avatar_emoji'] as String? ?? map['avatarEmoji'] as String? ?? 'avatar',
       avatarBase64: map['avatar_base64'] as String? ?? map['avatarBase64'] as String?,
+      bankName: map['bank_name'] as String? ?? map['bankName'] as String? ?? '',
+      bankBin: map['bank_bin'] as String? ?? map['bankBin'] as String? ?? '',
+      bankAccountNumber: map['bank_account_number'] as String? ?? map['bankAccountNumber'] as String? ?? '',
+      bankAccountHolder: map['bank_account_holder'] as String? ?? map['bankAccountHolder'] as String? ?? '',
       totalPurchases: (map['total_purchases'] as num?)?.toInt() ?? (map['totalPurchases'] as num?)?.toInt() ?? 0,
       totalSales: (map['total_sales'] as num?)?.toInt() ?? (map['totalSales'] as num?)?.toInt() ?? 0,
       rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
@@ -50,6 +62,10 @@ class UserProfile {
       'university': university,
       'avatar_emoji': avatarEmoji,
       'avatar_base64': avatarBase64,
+      'bank_name': bankName,
+      'bank_bin': bankBin,
+      'bank_account_number': bankAccountNumber,
+      'bank_account_holder': bankAccountHolder,
       'total_purchases': totalPurchases,
       'total_sales': totalSales,
       'rating': rating,
@@ -65,6 +81,10 @@ class UserProfile {
       'university': university,
       'avatarEmoji': avatarEmoji,
       'avatarBase64': avatarBase64,
+      'bankName': bankName,
+      'bankBin': bankBin,
+      'bankAccountNumber': bankAccountNumber,
+      'bankAccountHolder': bankAccountHolder,
       'totalPurchases': totalPurchases,
       'totalSales': totalSales,
       'rating': rating,
@@ -81,4 +101,10 @@ class UserProfile {
   }
 
   bool get hasCustomAvatar => avatarBase64 != null && avatarBase64!.trim().isNotEmpty;
+
+  bool get hasBankAccount =>
+      bankName.trim().isNotEmpty &&
+      bankBin.trim().isNotEmpty &&
+      bankAccountNumber.trim().isNotEmpty &&
+      bankAccountHolder.trim().isNotEmpty;
 }

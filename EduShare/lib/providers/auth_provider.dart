@@ -85,6 +85,51 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    final user = _auth.currentUser;
+    final email = user?.email;
+
+    if (user == null || email == null || email.trim().isEmpty) {
+      _errorMessage = 'Khong tim thay tai khoan dang dang nhap.';
+      notifyListeners();
+      return false;
+    }
+
+    _loading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final credential = EmailAuthProvider.credential(
+        email: email,
+        password: currentPassword,
+      );
+
+      await user.reauthenticateWithCredential(credential).timeout(
+        const Duration(seconds: 15),
+      );
+      await user.updatePassword(newPassword).timeout(
+        const Duration(seconds: 15),
+      );
+      _currentUser = _auth.currentUser;
+      return true;
+    } on FirebaseAuthException catch (error) {
+      _errorMessage = _mapAuthError(error);
+      return false;
+    } on TimeoutException {
+      _errorMessage = 'Firebase phan hoi qua lau. Kiem tra mang va thu lai.';
+      return false;
+    } catch (_) {
+      _errorMessage = 'Doi mat khau that bai do loi ket noi Firebase.';
+      return false;
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> logout() async {
     _loading = true;
     notifyListeners();
@@ -103,6 +148,8 @@ class AuthProvider extends ChangeNotifier {
       case 'wrong-password':
       case 'invalid-credential':
         return 'Email hoac mat khau khong dung.';
+      case 'requires-recent-login':
+        return 'Vui long dang nhap lai truoc khi doi mat khau.';
       case 'email-already-in-use':
         return 'Email nay da duoc dang ky.';
       case 'weak-password':

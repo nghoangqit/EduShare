@@ -18,19 +18,21 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
 
-  final List<Widget> _screens = const [
-    HomeScreen(),
-    SearchScreen(),
-    CartScreen(),
-    ProfileScreen(),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final screens = [
+      const HomeScreen(),
+      const SearchScreen(),
+      CartScreen(
+        onExploreProducts: () => setState(() => _selectedIndex = 0),
+      ),
+      const ProfileScreen(),
+    ];
+
     return Scaffold(
       body: IndexedStack(
         index: _selectedIndex,
-        children: _screens,
+        children: screens,
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
