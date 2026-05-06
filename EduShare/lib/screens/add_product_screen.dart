@@ -138,7 +138,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
                       ),
                       Switch(
                         value: _isFree,
-                        activeColor: AppColors.primary,
+                        activeThumbColor: AppColors.primary,
+                        activeTrackColor: AppColors.primaryLight,
                         onChanged: (v) => setState(() {
                           _isFree = v;
                           if (v) {
@@ -233,7 +234,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
                       ),
                       Switch(
                         value: _isFeatured,
-                        activeColor: AppColors.amber,
+                        activeThumbColor: AppColors.amber,
+                        activeTrackColor: const Color(0xFFFEF3C7),
                         onChanged: (v) => setState(() => _isFeatured = v),
                       ),
                     ],
@@ -283,7 +285,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.primary.withOpacity(0.18)),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -409,7 +411,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 boxShadow: selected
                     ? [
                         BoxShadow(
-                          color: AppColors.primary.withOpacity(0.3),
+                          color: AppColors.primary.withValues(alpha: 0.3),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -456,7 +458,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: AppColors.red.withOpacity(0.1),
+            color: AppColors.red.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text('Giam $pct%', style: const TextStyle(color: AppColors.red, fontWeight: FontWeight.bold, fontSize: 12)),
@@ -480,7 +482,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
     );
@@ -533,7 +535,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     required void Function(String?) onChanged,
   }) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
@@ -618,15 +620,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        contentPadding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
-              width: 90,
-              height: 90,
-              child: Image.asset(imageForProductType(_selectedType)),
-            ),
-            const SizedBox(height: 12),
+            const _SuccessCheckmark(),
+            const SizedBox(height: 18),
             const Text('Dang thanh cong!', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark)),
             const SizedBox(height: 8),
             Text(
@@ -634,7 +633,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
               textAlign: TextAlign.center,
               style: const TextStyle(color: AppColors.textGray, fontSize: 13),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             Row(
               children: [
                 Expanded(
@@ -685,5 +684,83 @@ class _AddProductScreenState extends State<AddProductScreen> {
       _isFree = false;
       _isFeatured = false;
     });
+  }
+}
+
+class _SuccessCheckmark extends StatefulWidget {
+  const _SuccessCheckmark();
+
+  @override
+  State<_SuccessCheckmark> createState() => _SuccessCheckmarkState();
+}
+
+class _SuccessCheckmarkState extends State<_SuccessCheckmark>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scale;
+  late final Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    );
+    _scale = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.elasticOut,
+    );
+    _fade = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOut,
+    );
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fade,
+      child: ScaleTransition(
+        scale: _scale,
+        child: Container(
+          width: 92,
+          height: 92,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFFE9F9F1),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF16A34A).withValues(alpha: 0.18),
+                blurRadius: 18,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Center(
+            child: Container(
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0xFF16A34A),
+              ),
+              child: const Icon(
+                Icons.check_rounded,
+                color: Colors.white,
+                size: 40,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

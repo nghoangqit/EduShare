@@ -23,17 +23,12 @@ class _AppShellState extends State<AppShell> {
     final screens = [
       const HomeScreen(),
       const SearchScreen(),
-      CartScreen(
-        onExploreProducts: () => setState(() => _selectedIndex = 0),
-      ),
+      CartScreen(onExploreProducts: () => setState(() => _selectedIndex = 0)),
       const ProfileScreen(),
     ];
 
     return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: screens,
-      ),
+      body: IndexedStack(index: _selectedIndex, children: screens),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
           final result = await Navigator.push(
@@ -67,17 +62,32 @@ class _AppShellState extends State<AppShell> {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _navItem(0, Icons.home_rounded, Icons.home_outlined, 'Trang chủ'),
-            _navItem(1, Icons.search_rounded, Icons.search_outlined, 'Tìm kiếm'),
+            _navItem(
+              1,
+              Icons.search_rounded,
+              Icons.search_outlined,
+              'Tìm kiếm',
+            ),
             const SizedBox(width: 48),
             _navCartItem(),
-            _navItem(3, Icons.person_rounded, Icons.person_outline_rounded, 'Hồ sơ'),
+            _navItem(
+              3,
+              Icons.person_rounded,
+              Icons.person_outline_rounded,
+              'Hồ sơ',
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _navItem(int index, IconData activeIcon, IconData inactiveIcon, String label) {
+  Widget _navItem(
+    int index,
+    IconData activeIcon,
+    IconData inactiveIcon,
+    String label,
+  ) {
     final selected = _selectedIndex == index;
     return GestureDetector(
       onTap: () => setState(() => _selectedIndex = index),
@@ -137,9 +147,13 @@ class _AppShellState extends State<AppShell> {
                   clipBehavior: Clip.none,
                   children: [
                     Icon(
-                      selected ? Icons.shopping_cart_rounded : Icons.shopping_cart_outlined,
+                      selected
+                          ? Icons.shopping_cart_rounded
+                          : Icons.shopping_cart_outlined,
                       size: 22,
-                      color: selected ? AppColors.primary : const Color(0xFF94A3B8),
+                      color: selected
+                          ? AppColors.primary
+                          : const Color(0xFF94A3B8),
                     ),
                     if (cart.totalCount > 0)
                       Positioned(
@@ -153,7 +167,11 @@ class _AppShellState extends State<AppShell> {
                           ),
                           child: Text(
                             '${cart.totalCount}',
-                            style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 8,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
@@ -164,7 +182,9 @@ class _AppShellState extends State<AppShell> {
                   'Giỏ hàng',
                   style: TextStyle(
                     fontSize: 10,
-                    color: selected ? AppColors.primary : const Color(0xFF94A3B8),
+                    color: selected
+                        ? AppColors.primary
+                        : const Color(0xFF94A3B8),
                     fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
                   ),
                 ),

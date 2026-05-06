@@ -11,6 +11,7 @@ class PurchaseRecord {
   final int quantity;
   final double totalPrice;
   final String status;
+  final String paymentMethod;
   final String transferNote;
   final DateTime createdAt;
 
@@ -27,6 +28,7 @@ class PurchaseRecord {
     required this.quantity,
     required this.totalPrice,
     required this.status,
+    required this.paymentMethod,
     required this.transferNote,
     required this.createdAt,
   });
@@ -45,6 +47,7 @@ class PurchaseRecord {
       quantity: (map['quantity'] as num?)?.toInt() ?? 1,
       totalPrice: (map['totalPrice'] as num?)?.toDouble() ?? 0,
       status: map['status'] as String? ?? 'confirmed',
+      paymentMethod: map['paymentMethod'] as String? ?? 'online',
       transferNote: map['transferNote'] as String? ?? '',
       createdAt: DateTime.tryParse((map['createdAt'] ?? '').toString()) ?? DateTime.now(),
     );

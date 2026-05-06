@@ -1,8 +1,10 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+
 import '../models/user_profile.dart';
 import '../providers/auth_provider.dart';
 import '../services/firebase_data_service.dart';
@@ -21,6 +23,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final FirebaseDataService _dataService = FirebaseDataService.instance;
   final ImagePicker _imagePicker = ImagePicker();
+
   UserProfile? _profile;
   int _purchaseCount = 0;
   int _sellingCount = 0;
@@ -62,72 +65,228 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_loading) {
       return const Scaffold(
         backgroundColor: AppColors.bg,
-        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+        body: Center(
+          child: CircularProgressIndicator(color: AppColors.primary),
+        ),
       );
     }
 
     if (_profile == null) {
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: AppColors.bg,
-        body: Center(
+        appBar: AppBar(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          title: const Text('Ho so'),
+        ),
+        body: const Center(
           child: Text(
             'Khong tim thay ho so',
-            style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              color: AppColors.textDark,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       );
     }
 
+    final profile = _profile!;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F6F8),
+      backgroundColor: AppColors.bg,
+      appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        title: const Text('Ho so'),
+        actions: [
+          IconButton(
+            onPressed: _showEditProfile,
+            icon: const Icon(Icons.edit_outlined),
+          ),
+        ],
+      ),
       body: RefreshIndicator(
-        color: AppColors.primary,
         onRefresh: _loadProfile,
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-          slivers: [
-            SliverToBoxAdapter(child: _buildHeroSection()),
-            SliverToBoxAdapter(child: _buildHighlightStrip()),
-            SliverToBoxAdapter(child: _buildActionGrid()),
-            SliverToBoxAdapter(child: _buildMenuSection()),
-            const SliverToBoxAdapter(child: SizedBox(height: 96)),
+        color: AppColors.primary,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          children: [
+            _buildHeroCard(profile),
+            const SizedBox(height: 16),
+            _buildQuickActions(),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _statCard(
+                    label: 'Da mua',
+                    value: '$_purchaseCount',
+                    icon: Icons.shopping_bag_outlined,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _statCard(
+                    label: 'Dang ban',
+                    value: '$_sellingCount',
+                    icon: Icons.sell_outlined,
+                    color: AppColors.blue,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _statCard(
+                    label: 'Yeu thich',
+                    value: '$_favoriteCount',
+                    icon: Icons.favorite_outline_rounded,
+                    color: AppColors.red,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _sectionCard(
+              title: 'Thong tin tai khoan',
+              subtitle: 'Ho so ca nhan va cach lien he voi ban.',
+              child: Column(
+                children: [
+                  _infoRow('Ho va ten', profile.name),
+                  _infoRow('Email', profile.email, copyValue: profile.email),
+                  _infoRow(
+                    'So dien thoai',
+                    profile.phone.trim().isEmpty ? 'Chua cap nhat' : profile.phone,
+                    copyValue: profile.phone.trim().isEmpty ? null : profile.phone,
+                  ),
+                  _infoRow(
+                    'Truong',
+                    profile.university.trim().isEmpty
+                        ? 'Chua cap nhat'
+                        : profile.university,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _sectionCard(
+              title: 'Thanh toan ngan hang',
+              subtitle: 'Thong tin nay duoc dung de tao QR chuyen khoan cho nguoi mua.',
+              child: Column(
+                children: [
+                  _bankHighlight(profile),
+                  const SizedBox(height: 14),
+                  _infoRow(
+                    'Ngan hang',
+                    profile.bankName.trim().isEmpty
+                        ? 'Chua cap nhat'
+                        : profile.bankName,
+                  ),
+                  _infoRow(
+                    'Ma BIN',
+                    profile.bankBin.trim().isEmpty
+                        ? 'Chua cap nhat'
+                        : profile.bankBin,
+                  ),
+                  _infoRow(
+                    'So tai khoan',
+                    profile.bankAccountNumber.trim().isEmpty
+                        ? 'Chua cap nhat'
+                        : profile.bankAccountNumber,
+                    copyValue: profile.bankAccountNumber.trim().isEmpty
+                        ? null
+                        : profile.bankAccountNumber,
+                  ),
+                  _infoRow(
+                    'Chu tai khoan',
+                    profile.bankAccountHolder.trim().isEmpty
+                        ? 'Chua cap nhat'
+                        : profile.bankAccountHolder,
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _showEditProfile,
+                      icon: const Icon(Icons.account_balance_outlined),
+                      label: Text(
+                        profile.hasBankAccount
+                            ? 'Chinh sua thong tin ngan hang'
+                            : 'Them thong tin ngan hang',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _sectionCard(
+              title: 'Bao mat',
+              subtitle: 'Quan ly mat khau va phien dang nhap cua ban.',
+              child: Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _showChangePasswordSheet,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        minimumSize: const Size.fromHeight(50),
+                      ),
+                      icon: const Icon(Icons.lock_outline_rounded),
+                      label: const Text('Doi mat khau'),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _confirmLogout,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.red,
+                        minimumSize: const Size.fromHeight(50),
+                      ),
+                      icon: const Icon(Icons.logout_rounded),
+                      label: const Text('Dang xuat'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHeroSection() {
-    final profile = _profile!;
+  Widget _buildHeroCard(UserProfile profile) {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
         gradient: const LinearGradient(
+          colors: [Color(0xFF062E2B), Color(0xFF0D9488), Color(0xFF2DD4BF)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF062E2B),
-            Color(0xFF0D9488),
-            Color(0xFF43C6B6),
-          ],
         ),
+        borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0D9488).withValues(alpha: 0.25),
-            blurRadius: 28,
-            offset: const Offset(0, 18),
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
       child: Stack(
         children: [
           Positioned(
-            top: -40,
-            right: -20,
+            top: -28,
+            right: -18,
             child: Container(
-              width: 140,
-              height: 140,
+              width: 110,
+              height: 110,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.white.withValues(alpha: 0.08),
@@ -135,552 +294,207 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           Positioned(
-            bottom: -30,
-            left: -20,
+            bottom: -38,
+            left: -26,
             child: Container(
-              width: 120,
-              height: 120,
+              width: 130,
+              height: 130,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.06),
+                color: Colors.white.withValues(alpha: 0.05),
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(22, 18, 22, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Expanded(
-                      child: Text(
-                        'Ho so cua toi',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.2,
-                        ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Khong gian cua ban',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.92),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    _glassIconButton(Icons.edit_outlined, _showEditProfile),
-                  ],
-                ),
-                const SizedBox(height: 22),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Stack(
+                  ),
+                  _statusChip(
+                    label: profile.hasBankAccount ? 'QR READY' : 'CAN CAP NHAT',
+                    color: profile.hasBankAccount
+                        ? const Color(0xFFD1FAE5)
+                        : const Color(0xFFFFE6B5),
+                    textColor: profile.hasBankAccount
+                        ? const Color(0xFF065F46)
+                        : const Color(0xFF92400E),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: _pickAvatar,
+                    child: Stack(
                       children: [
                         Container(
-                          width: 104,
-                          height: 104,
+                          width: 96,
+                          height: 96,
+                          clipBehavior: Clip.antiAlias,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.9), width: 3),
+                            border: Border.all(color: Colors.white, width: 3),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.18),
-                                blurRadius: 18,
+                                color: Colors.black.withValues(alpha: 0.16),
+                                blurRadius: 16,
                                 offset: const Offset(0, 8),
                               ),
                             ],
                           ),
-                          clipBehavior: Clip.antiAlias,
-                          child: GestureDetector(
-                            onTap: _pickAvatar,
-                            child: _buildAvatarImage(),
-                          ),
+                          child: _buildAvatarImage(),
                         ),
                         Positioned(
-                          right: 4,
-                          bottom: 4,
+                          right: 0,
+                          bottom: 0,
                           child: Container(
                             width: 28,
                             height: 28,
                             decoration: BoxDecoration(
                               color: Colors.white,
                               shape: BoxShape.circle,
-                              border: Border.all(color: const Color(0xFFB8F4ED), width: 2),
+                              border: Border.all(
+                                color: const Color(0xFFC9F7F0),
+                                width: 2,
+                              ),
                             ),
-                            child: const Icon(Icons.camera_alt_outlined, size: 14, color: AppColors.primary),
+                            child: const Icon(
+                              Icons.camera_alt_outlined,
+                              size: 14,
+                              color: AppColors.primary,
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(width: 18),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            profile.name,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                              height: 1.15,
-                            ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          profile.name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 23,
+                            fontWeight: FontWeight.w800,
                           ),
-                          const SizedBox(height: 8),
-                          _heroInfoChip(
-                            icon: Icons.alternate_email_rounded,
-                            label: profile.email,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          profile.email,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.9),
+                            fontSize: 13,
                           ),
-                          if (profile.university.trim().isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            _heroInfoChip(
-                              icon: Icons.school_outlined,
-                              label: profile.university,
-                            ),
-                          ],
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                                ),
-                                child: Row(
-                                  children: [
-                                    ...List.generate(5, (i) {
-                                      return Icon(
-                                        i < profile.rating.floor()
-                                            ? Icons.star_rounded
-                                            : (i < profile.rating ? Icons.star_half_rounded : Icons.star_outline_rounded),
-                                        color: const Color(0xFFFFD76A),
-                                        size: 16,
-                                      );
-                                    }),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '${profile.rating}',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          profile.university.trim().isEmpty
+                              ? 'Chua cap nhat truong hoc'
+                              : profile.university,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.82),
+                            fontSize: 12.5,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _heroMiniInfo(
+                                icon: Icons.calendar_month_outlined,
+                                label: 'Tham gia tu',
+                                value: Formatter.joinDate(profile.joinDate),
                               ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 22),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _heroMetric(
-                          value: Formatter.joinDate(profile.joinDate),
-                          label: 'Thanh vien tu',
-                        ),
-                      ),
-                      Container(width: 1, height: 36, color: Colors.white.withValues(alpha: 0.12)),
-                      Expanded(
-                        child: _heroMetric(
-                          value: profile.phone.trim().isEmpty ? 'Cap nhat' : profile.phone,
-                          label: 'Lien he',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHighlightStrip() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-      child: Row(
-        children: [
-          Expanded(
-            child: _highlightCard(
-              title: 'Da mua',
-              value: '$_purchaseCount',
-              subtitle: 'Don hang cua ban',
-              icon: Icons.shopping_bag_outlined,
-              accent: AppColors.primary,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _highlightCard(
-              title: 'Dang ban',
-              value: '$_sellingCount',
-              subtitle: 'San pham dang hien thi',
-              icon: Icons.sell_outlined,
-              accent: AppColors.blue,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionGrid() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 18,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Khong gian giao dich',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textDark,
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Theo doi nhanh cac danh muc ban su dung nhieu nhat.',
-              style: TextStyle(fontSize: 13, color: AppColors.textGray, height: 1.4),
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  child: _actionTile(
-                    icon: Icons.history_rounded,
-                    title: 'Lich su mua',
-                    subtitle: 'Xem cac giao dich da dat',
-                    accent: AppColors.primary,
-                    badge: '$_purchaseCount',
-                    onTap: _openPurchaseHistory,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _actionTile(
-                    icon: Icons.favorite_rounded,
-                    title: 'Yeu thich',
-                    subtitle: 'Luu cac mon ban quan tam',
-                    accent: AppColors.red,
-                    badge: '$_favoriteCount',
-                    onTap: _openFavoriteProducts,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMenuSection() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-      child: Column(
-        children: [
-          _menuGroup(
-            'Tai khoan',
-            'Quan ly thong tin va bao mat',
-            [
-              _MenuItem(
-                icon: Icons.person_outline_rounded,
-                label: 'Thong tin ca nhan',
-                subtitle: 'Cap nhat ten, truong va thong tin lien he',
-                onTap: _showEditProfile,
-              ),
-              _MenuItem(
-                icon: Icons.phone_iphone_outlined,
-                label: 'So dien thoai',
-                subtitle: _profile!.phone.trim().isEmpty ? 'Chua cap nhat' : _profile!.phone,
-                onTap: _showEditProfile,
-              ),
-              _MenuItem(
-                icon: Icons.account_balance_outlined,
-                label: 'Tai khoan ngan hang',
-                subtitle: _profile!.hasBankAccount
-                    ? '${_profile!.bankName} • ${_profile!.bankAccountNumber}'
-                    : 'Them thong tin de nhan thanh toan bang QR',
-                onTap: _showEditProfile,
-              ),
-              _MenuItem(
-                icon: Icons.lock_outline_rounded,
-                label: 'Doi mat khau',
-                subtitle: 'Tang bao mat cho tai khoan cua ban',
-                onTap: _showChangePasswordSheet,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          _menuGroup(
-            'Hoat dong',
-            'Cac khu vuc du lieu va giao dich',
-            [
-              _MenuItem(
-                icon: Icons.storefront_outlined,
-                label: 'San pham dang ban',
-                subtitle: 'Quan ly nhung bai dang dang hien thi',
-                badge: '$_sellingCount',
-                onTap: _openSellingProducts,
-              ),
-              _MenuItem(
-                icon: Icons.favorite_border_rounded,
-                label: 'Yeu thich',
-                subtitle: 'Danh sach san pham luu lai de xem sau',
-                badge: '$_favoriteCount',
-                onTap: _openFavoriteProducts,
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          _menuGroup(
-            'Ho tro',
-            'Tro giup va thong tin he thong',
-            [
-              _MenuItem(
-                icon: Icons.help_outline_rounded,
-                label: 'Trung tam ho tro',
-                subtitle: 'Cau hoi thuong gap va huong dan',
-                onTap: () {},
-              ),
-              _MenuItem(
-                icon: Icons.info_outline_rounded,
-                label: 'Ve EduShare',
-                subtitle: 'Nen tang mua ban do dung hoc tap',
-                onTap: () {},
-              ),
-              _MenuItem(
-                icon: Icons.logout_rounded,
-                label: 'Dang xuat',
-                subtitle: 'Thoat khoi tai khoan hien tai',
-                color: AppColors.red,
-                onTap: _confirmLogout,
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _menuGroup(String title, String subtitle, List<_MenuItem> items) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.045),
-            blurRadius: 16,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textDark),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: const TextStyle(fontSize: 13, color: AppColors.textGray, height: 1.4),
-          ),
-          const SizedBox(height: 12),
-          ...List.generate(items.length, (index) {
-            final item = items[index];
-            final color = item.color ?? AppColors.primary;
-            return Container(
-              margin: EdgeInsets.only(bottom: index == items.length - 1 ? 0 : 12),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FBFC),
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: color.withValues(alpha: 0.08)),
-              ),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(18),
-                onTap: item.onTap,
-                child: Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        gradient: LinearGradient(
-                          colors: [
-                            color.withValues(alpha: 0.18),
-                            color.withValues(alpha: 0.07),
-                          ],
-                        ),
-                      ),
-                      child: Icon(item.icon, color: color, size: 22),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item.label,
-                            style: TextStyle(
-                              fontSize: 14.5,
-                              fontWeight: FontWeight.w700,
-                              color: item.color ?? AppColors.textDark,
                             ),
-                          ),
-                          if (item.subtitle != null) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              item.subtitle!,
-                              style: const TextStyle(fontSize: 12.5, color: AppColors.textGray, height: 1.35),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _heroMiniInfo(
+                                icon: Icons.phone_outlined,
+                                label: 'Lien he',
+                                value: profile.phone.trim().isEmpty
+                                    ? 'Cap nhat'
+                                    : profile.phone,
+                              ),
                             ),
                           ],
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                    if (item.badge != null)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          item.badge!,
-                          style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w800),
-                        ),
-                      )
-                    else
-                      Icon(Icons.arrow_forward_ios_rounded, size: 15, color: color.withValues(alpha: 0.65)),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _glassIconButton(IconData icon, VoidCallback onPressed) {
-    return Material(
-      color: Colors.white.withValues(alpha: 0.14),
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onPressed,
-        child: SizedBox(
-          width: 44,
-          height: 44,
-          child: Icon(icon, color: Colors.white, size: 20),
-        ),
-      ),
-    );
-  }
-
-  Widget _heroInfoChip({required IconData icon, required String label}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: const Color(0xFFD5FFF9)),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12.5,
-                fontWeight: FontWeight.w500,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _heroMetric({required String value, required String label}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildQuickActions() {
+    return Row(
       children: [
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
+        Expanded(
+          child: _shortcutTile(
+            icon: Icons.history_rounded,
+            title: 'Lich su',
+            subtitle: 'Don mua',
+            color: AppColors.primary,
+            onTap: _openPurchaseHistory,
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            color: Color(0xFFD4F8F2),
-            fontSize: 11.5,
-            fontWeight: FontWeight.w500,
+        const SizedBox(width: 12),
+        Expanded(
+          child: _shortcutTile(
+            icon: Icons.storefront_outlined,
+            title: 'Dang ban',
+            subtitle: 'San pham',
+            color: AppColors.blue,
+            onTap: _openSellingProducts,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _shortcutTile(
+            icon: Icons.favorite_outline_rounded,
+            title: 'Da luu',
+            subtitle: 'Yeu thich',
+            color: AppColors.red,
+            onTap: _openFavoriteProducts,
           ),
         ),
       ],
     );
   }
 
-  Widget _highlightCard({
-    required String title,
+  Widget _statCard({
+    required String label,
     required String value,
-    required String subtitle,
     required IconData icon,
-    required Color accent,
+    required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 14,
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
             offset: const Offset(0, 8),
           ),
         ],
@@ -689,96 +503,135 @@ class _ProfileScreenState extends State<ProfileScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 42,
-            height: 42,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              color: accent.withValues(alpha: 0.12),
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: accent),
+            child: Icon(icon, color: color),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 12),
           Text(
             value,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.textDark),
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: AppColors.textDark,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
-            title,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textDark),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: const TextStyle(fontSize: 12.5, color: AppColors.textGray, height: 1.35),
+            label,
+            style: const TextStyle(
+              fontSize: 12.5,
+              color: AppColors.textGray,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _actionTile({
+  Widget _sectionCard({
+    required String title,
+    String? subtitle,
+    required Widget child,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textDark,
+            ),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: const TextStyle(
+                fontSize: 12.5,
+                color: AppColors.textGray,
+                height: 1.35,
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _shortcutTile({
     required IconData icon,
     required String title,
     required String subtitle,
-    required Color accent,
-    required String badge,
+    required Color color,
     required VoidCallback onTap,
   }) {
     return InkWell(
-      borderRadius: BorderRadius.circular(22),
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
+      borderRadius: BorderRadius.circular(22),
+      child: Ink(
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
+          color: Colors.white,
           borderRadius: BorderRadius.circular(22),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              accent.withValues(alpha: 0.12),
-              accent.withValues(alpha: 0.04),
-            ],
-          ),
-          border: Border.all(color: accent.withValues(alpha: 0.10)),
+          border: Border.all(color: color.withValues(alpha: 0.10)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.035),
+              blurRadius: 10,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.85),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(icon, color: accent, size: 20),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    badge,
-                    style: TextStyle(color: accent, fontWeight: FontWeight.w800, fontSize: 12),
-                  ),
-                ),
-              ],
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: color),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
             Text(
               title,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textDark),
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textDark,
+              ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             Text(
               subtitle,
-              style: const TextStyle(fontSize: 12.5, color: AppColors.textGray, height: 1.35),
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textGray,
+              ),
             ),
           ],
         ),
@@ -786,27 +639,291 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _bankHighlight(UserProfile profile) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: profile.hasBankAccount
+              ? [
+                  const Color(0xFFE8FFF9),
+                  const Color(0xFFF5FFFC),
+                ]
+              : [
+                  const Color(0xFFFFF8E7),
+                  const Color(0xFFFFFCF3),
+                ],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: profile.hasBankAccount
+              ? const Color(0xFFBDEBDD)
+              : const Color(0xFFF5D58B),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: profile.hasBankAccount
+                  ? const Color(0xFFD1FAE5)
+                  : const Color(0xFFFFE7B3),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              profile.hasBankAccount
+                  ? Icons.qr_code_2_rounded
+                  : Icons.info_outline_rounded,
+              color: profile.hasBankAccount
+                  ? const Color(0xFF047857)
+                  : const Color(0xFFB45309),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  profile.hasBankAccount
+                      ? 'San sang tao QR thanh toan'
+                      : 'Chua du thong tin de tao QR',
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textDark,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  profile.hasBankAccount
+                      ? 'Nguoi mua co the quet QR va chuyen tien dung thong tin tai khoan cua ban.'
+                      : 'Cap nhat day du ngan hang, BIN, so tai khoan va ten chu tai khoan.',
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: AppColors.textGray,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _heroMiniInfo({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: const Color(0xFFD9FFF8)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.72),
+                    fontSize: 10.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusChip({
+    required String label,
+    required Color color,
+    required Color textColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  Widget _menuTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Ink(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FBFC),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: AppColors.primary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: AppColors.textGray,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 15,
+              color: AppColors.textGray,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value, {String? copyValue}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 98,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12.5,
+                color: AppColors.textGray,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 12.8,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textDark,
+              ),
+            ),
+          ),
+          if (copyValue != null)
+            IconButton(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: copyValue));
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Da sao chep thong tin.'),
+                    duration: Duration(milliseconds: 900),
+                  ),
+                );
+              },
+              icon: const Icon(
+                Icons.copy_rounded,
+                size: 18,
+                color: AppColors.primary,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   void _showEditProfile() {
+    if (_profile == null) return;
+
     final nameCtrl = TextEditingController(text: _profile!.name);
     final phoneCtrl = TextEditingController(text: _profile!.phone);
     final uniCtrl = TextEditingController(text: _profile!.university);
     final bankNameCtrl = TextEditingController(text: _profile!.bankName);
     final bankBinCtrl = TextEditingController(text: _profile!.bankBin);
-    final bankNumberCtrl = TextEditingController(text: _profile!.bankAccountNumber);
-    final bankHolderCtrl = TextEditingController(text: _profile!.bankAccountHolder);
+    final bankNumberCtrl = TextEditingController(
+      text: _profile!.bankAccountNumber,
+    );
+    final bankHolderCtrl = TextEditingController(
+      text: _profile!.bankAccountHolder,
+    );
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
         child: Container(
+          padding: const EdgeInsets.all(20),
           decoration: const BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
-          padding: const EdgeInsets.all(20),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -817,61 +934,106 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const Expanded(
                       child: Text(
                         'Chinh sua ho so',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                    IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => Navigator.pop(context)),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 14),
                 _editField('Ho va ten', nameCtrl, Icons.person_outline),
                 const SizedBox(height: 12),
-                _editField('So dien thoai', phoneCtrl, Icons.phone_outlined, type: TextInputType.phone),
+                _editField(
+                  'So dien thoai',
+                  phoneCtrl,
+                  Icons.phone_outlined,
+                  type: TextInputType.phone,
+                ),
                 const SizedBox(height: 12),
-                _editField('Truong dai hoc', uniCtrl, Icons.school_outlined),
+                _editField(
+                  'Truong dai hoc',
+                  uniCtrl,
+                  Icons.school_outlined,
+                ),
                 const SizedBox(height: 18),
                 const Text(
-                  'Nhan thanh toan bang QR',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.textDark),
+                  'Thong tin QR ngan hang',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textDark,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 const Text(
-                  'Khai bao thong tin ngan hang de nguoi mua co the tao QR chuyen khoan tu dong.',
-                  style: TextStyle(fontSize: 12.5, color: AppColors.textGray, height: 1.4),
+                  'Nhap day du ten ngan hang, ma BIN, so tai khoan va ten chu tai khoan de nguoi mua co the quet QR chuyen tien.',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: AppColors.textGray,
+                    height: 1.4,
+                  ),
                 ),
                 const SizedBox(height: 14),
-                _editField('Ten ngan hang', bankNameCtrl, Icons.account_balance_outlined),
+                _editField(
+                  'Ten ngan hang',
+                  bankNameCtrl,
+                  Icons.account_balance_outlined,
+                ),
                 const SizedBox(height: 12),
-                _editField('Ma BIN ngan hang', bankBinCtrl, Icons.numbers_outlined, type: TextInputType.number),
+                _editField(
+                  'Ma BIN ngan hang',
+                  bankBinCtrl,
+                  Icons.numbers_outlined,
+                  type: TextInputType.number,
+                ),
                 const SizedBox(height: 12),
-                _editField('So tai khoan', bankNumberCtrl, Icons.credit_card_outlined, type: TextInputType.number),
+                _editField(
+                  'So tai khoan',
+                  bankNumberCtrl,
+                  Icons.credit_card_outlined,
+                  type: TextInputType.number,
+                ),
                 const SizedBox(height: 12),
-                _editField('Ten chu tai khoan', bankHolderCtrl, Icons.badge_outlined),
+                _editField(
+                  'Ten chu tai khoan',
+                  bankHolderCtrl,
+                  Icons.badge_outlined,
+                ),
                 const SizedBox(height: 20),
                 SizedBox(
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
                     onPressed: () async {
-                      _profile!.name = nameCtrl.text.trim();
-                      _profile!.phone = phoneCtrl.text.trim();
-                      _profile!.university = uniCtrl.text.trim();
-                      _profile!.bankName = bankNameCtrl.text.trim();
-                      _profile!.bankBin = bankBinCtrl.text.trim();
-                      _profile!.bankAccountNumber = bankNumberCtrl.text.trim();
-                      _profile!.bankAccountHolder = bankHolderCtrl.text.trim();
+                      _profile!
+                        ..name = nameCtrl.text.trim()
+                        ..phone = phoneCtrl.text.trim()
+                        ..university = uniCtrl.text.trim()
+                        ..bankName = bankNameCtrl.text.trim()
+                        ..bankBin = bankBinCtrl.text.trim()
+                        ..bankAccountNumber = bankNumberCtrl.text.trim()
+                        ..bankAccountHolder = bankHolderCtrl.text.trim();
+
                       await _dataService.updateUserProfile(_profile!);
                       if (!mounted) return;
                       setState(() {});
                       Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Da cap nhat ho so.')),
+                      );
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
-                    child: const Text('Luu thay doi', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                    child: const Text('Luu thay doi'),
                   ),
                 ),
               ],
@@ -900,13 +1062,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
           builder: (context, setSheetState) {
             final auth = context.watch<AuthProvider>();
             return Padding(
-              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
               child: Container(
+                padding: const EdgeInsets.all(20),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
                 ),
-                padding: const EdgeInsets.all(20),
                 child: Form(
                   key: formKey,
                   child: Column(
@@ -918,26 +1082,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           const Expanded(
                             child: Text(
                               'Doi mat khau',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
                           IconButton(
+                            onPressed: auth.loading
+                                ? null
+                                : () => Navigator.pop(sheetContext),
                             icon: const Icon(Icons.close_rounded),
-                            onPressed: auth.loading ? null : () => Navigator.pop(sheetContext),
                           ),
                         ],
                       ),
                       const SizedBox(height: 8),
                       const Text(
-                        'Nhap mat khau hien tai de xac thuc, sau do dat mat khau moi cho tai khoan.',
-                        style: TextStyle(fontSize: 13, color: AppColors.textGray, height: 1.4),
+                        'Nhap mat khau hien tai va dat mat khau moi cho tai khoan cua ban.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textGray,
+                          height: 1.4,
+                        ),
                       ),
                       const SizedBox(height: 16),
                       _passwordField(
                         label: 'Mat khau hien tai',
                         controller: currentPasswordCtrl,
                         obscureText: obscureCurrent,
-                        onToggleVisibility: () => setSheetState(() => obscureCurrent = !obscureCurrent),
+                        onToggleVisibility: () => setSheetState(
+                          () => obscureCurrent = !obscureCurrent,
+                        ),
                         validator: (value) {
                           if ((value ?? '').trim().isEmpty) {
                             return 'Vui long nhap mat khau hien tai.';
@@ -950,7 +1125,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         label: 'Mat khau moi',
                         controller: newPasswordCtrl,
                         obscureText: obscureNew,
-                        onToggleVisibility: () => setSheetState(() => obscureNew = !obscureNew),
+                        onToggleVisibility: () => setSheetState(
+                          () => obscureNew = !obscureNew,
+                        ),
                         validator: (value) {
                           final password = value ?? '';
                           if (password.trim().isEmpty) {
@@ -970,7 +1147,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         label: 'Xac nhan mat khau moi',
                         controller: confirmPasswordCtrl,
                         obscureText: obscureConfirm,
-                        onToggleVisibility: () => setSheetState(() => obscureConfirm = !obscureConfirm),
+                        onToggleVisibility: () => setSheetState(
+                          () => obscureConfirm = !obscureConfirm,
+                        ),
                         validator: (value) {
                           if ((value ?? '').isEmpty) {
                             return 'Vui long xac nhan mat khau moi.';
@@ -985,7 +1164,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(height: 12),
                         Text(
                           auth.errorMessage!,
-                          style: const TextStyle(color: AppColors.red, fontSize: 12),
+                          style: const TextStyle(
+                            color: AppColors.red,
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                       const SizedBox(height: 20),
@@ -997,19 +1179,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ? null
                               : () async {
                                   FocusScope.of(context).unfocus();
-                                  if (!formKey.currentState!.validate()) return;
+                                  if (!formKey.currentState!.validate()) {
+                                    return;
+                                  }
 
-                                  final success = await context.read<AuthProvider>().changePassword(
-                                    currentPassword: currentPasswordCtrl.text,
-                                    newPassword: newPasswordCtrl.text,
-                                  );
+                                  final success = await context
+                                      .read<AuthProvider>()
+                                      .changePassword(
+                                        currentPassword:
+                                            currentPasswordCtrl.text,
+                                        newPassword: newPasswordCtrl.text,
+                                      );
 
                                   if (!mounted) return;
                                   if (success) {
                                     Navigator.pop(sheetContext);
-                                    ScaffoldMessenger.of(this.context).showSnackBar(
+                                    ScaffoldMessenger.of(this.context)
+                                        .showSnackBar(
                                       const SnackBar(
-                                        content: Text('Doi mat khau thanh cong.'),
+                                        content: Text(
+                                          'Doi mat khau thanh cong.',
+                                        ),
                                         backgroundColor: Colors.green,
                                       ),
                                     );
@@ -1019,15 +1209,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
                             elevation: 0,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                           ),
                           child: auth.loading
                               ? const SizedBox(
                                   width: 20,
                                   height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
                                 )
-                              : const Text('Cap nhat mat khau', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                              : const Text('Cap nhat mat khau'),
                         ),
                       ),
                     ],
@@ -1045,50 +1237,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
-  Future<void> _openPurchaseHistory() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => PurchaseHistoryScreen()),
-    );
-    _loadProfile();
-  }
-
-  Future<void> _openSellingProducts() async {
-    final userId = context.read<AuthProvider>().currentUser?.uid;
-    if (userId == null) return;
-
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ProductCollectionScreen(
-          title: 'San pham dang ban',
-          emptyTitle: 'Ban chua dang san pham nao',
-          emptySubtitle: 'Nhung san pham ban dang se hien thi tai day.',
-          loader: () => _dataService.getProductsBySeller(userId),
-        ),
-      ),
-    );
-    _loadProfile();
-  }
-
-  Future<void> _openFavoriteProducts() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ProductCollectionScreen(
-          title: 'Yeu thich',
-          emptyTitle: 'Danh sach yeu thich dang trong',
-          emptySubtitle: 'Nhan vao bieu tuong tim de luu san pham ban quan tam.',
-          loader: _dataService.getFavoriteProducts,
-        ),
-      ),
-    );
-    _loadProfile();
-  }
-
-  Widget _editField(String label, TextEditingController ctrl, IconData icon, {TextInputType? type}) {
+  Widget _editField(
+    String label,
+    TextEditingController controller,
+    IconData icon, {
+    TextInputType? type,
+  }) {
     return TextField(
-      controller: ctrl,
+      controller: controller,
       keyboardType: type,
       decoration: InputDecoration(
         labelText: label,
@@ -1120,11 +1276,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
       validator: validator,
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.primary, size: 20),
+        prefixIcon: const Icon(
+          Icons.lock_outline_rounded,
+          color: AppColors.primary,
+          size: 20,
+        ),
         suffixIcon: IconButton(
           onPressed: onToggleVisibility,
           icon: Icon(
-            obscureText ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+            obscureText
+                ? Icons.visibility_off_outlined
+                : Icons.visibility_outlined,
             color: AppColors.textGray,
           ),
         ),
@@ -1202,42 +1364,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _openPurchaseHistory() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => PurchaseHistoryScreen()),
+    );
+    _loadProfile();
+  }
+
+  Future<void> _openSellingProducts() async {
+    final userId = context.read<AuthProvider>().currentUser?.uid;
+    if (userId == null) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProductCollectionScreen(
+          title: 'San pham dang ban',
+          emptyTitle: 'Ban chua dang san pham nao',
+          emptySubtitle: 'Nhung san pham ban dang se hien thi tai day.',
+          loader: () => _dataService.getProductsBySeller(userId),
+        ),
+      ),
+    );
+    _loadProfile();
+  }
+
+  Future<void> _openFavoriteProducts() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProductCollectionScreen(
+          title: 'Yeu thich',
+          emptyTitle: 'Danh sach yeu thich dang trong',
+          emptySubtitle:
+              'Nhan vao bieu tuong tim de luu san pham ban quan tam.',
+          loader: _dataService.getFavoriteProducts,
+        ),
+      ),
+    );
+    _loadProfile();
+  }
+
   void _confirmLogout() {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Text('Dang xuat?'),
-        content: const Text('Ban co chac muon dang xuat khoi tai khoan hien tai khong?'),
+        content: const Text(
+          'Ban co chac muon dang xuat khoi tai khoan hien tai khong?',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Huy')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Huy'),
+          ),
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
               await context.read<AuthProvider>().logout();
             },
-            child: const Text('Dang xuat', style: TextStyle(color: AppColors.red)),
+            child: const Text(
+              'Dang xuat',
+              style: TextStyle(color: AppColors.red),
+            ),
           ),
         ],
       ),
     );
   }
-}
-
-class _MenuItem {
-  final IconData icon;
-  final String label;
-  final String? subtitle;
-  final String? badge;
-  final Color? color;
-  final VoidCallback onTap;
-
-  const _MenuItem({
-    required this.icon,
-    required this.label,
-    this.subtitle,
-    this.badge,
-    this.color,
-    required this.onTap,
-  });
 }

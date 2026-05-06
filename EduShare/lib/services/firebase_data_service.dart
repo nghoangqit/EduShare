@@ -13,10 +13,14 @@ class FirebaseDataService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  CollectionReference<Map<String, dynamic>> get _products => _firestore.collection('products');
-  CollectionReference<Map<String, dynamic>> get _users => _firestore.collection('users');
-  CollectionReference<Map<String, dynamic>> get _favorites => _firestore.collection('favorites');
-  CollectionReference<Map<String, dynamic>> get _orders => _firestore.collection('orders');
+  CollectionReference<Map<String, dynamic>> get _products =>
+      _firestore.collection('products');
+  CollectionReference<Map<String, dynamic>> get _users =>
+      _firestore.collection('users');
+  CollectionReference<Map<String, dynamic>> get _favorites =>
+      _firestore.collection('favorites');
+  CollectionReference<Map<String, dynamic>> get _orders =>
+      _firestore.collection('orders');
 
   Future<UserProfile> ensureUserProfile(User firebaseUser) async {
     final fallbackProfile = UserProfile(
@@ -73,15 +77,24 @@ class FirebaseDataService {
 
   Future<void> updateUserProfile(UserProfile profile) async {
     try {
-      await _users.doc(profile.id).set(profile.toFirestore(), SetOptions(merge: true));
+      await _users
+          .doc(profile.id)
+          .set(profile.toFirestore(), SetOptions(merge: true));
     } on FirebaseException catch (error) {
       if (error.code != 'permission-denied') rethrow;
     }
   }
 
   Future<List<Product>> getAllProducts() async {
-    final snapshot = await _products.orderBy('createdAt', descending: true).get();
-    return snapshot.docs.map(_productFromDoc).toList();
+    try {
+      final snapshot = await _products
+          .orderBy('createdAt', descending: true)
+          .get();
+      return snapshot.docs.map(_productFromDoc).toList();
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') return [];
+      rethrow;
+    }
   }
 
   Future<List<Product>> getFeaturedProducts() async {
@@ -109,9 +122,15 @@ class FirebaseDataService {
 
   Future<List<Product>> getProductsBySeller(String sellerUid) async {
     try {
-      final snapshot = await _products.where('sellerUid', isEqualTo: sellerUid).get();
+      final snapshot = await _products
+          .where('sellerUid', isEqualTo: sellerUid)
+          .get();
       final products = snapshot.docs.map(_productFromDoc).toList();
-      products.sort((a, b) => (b.createdAt ?? DateTime(1970)).compareTo(a.createdAt ?? DateTime(1970)));
+      products.sort(
+        (a, b) => (b.createdAt ?? DateTime(1970)).compareTo(
+          a.createdAt ?? DateTime(1970),
+        ),
+      );
       return products;
     } on FirebaseException catch (error) {
       if (error.code == 'permission-denied') return [];
@@ -124,16 +143,22 @@ class FirebaseDataService {
     if (user == null) return [];
 
     try {
-      final snapshot = await _orders.where('buyerUid', isEqualTo: user.uid).get();
+      final snapshot = await _orders
+          .where('buyerUid', isEqualTo: user.uid)
+          .get();
 
       final records = snapshot.docs.map((doc) {
         final data = doc.data();
-        return PurchaseRecord.fromMap({
-          'id': doc.id,
-          ...data,
-        });
+        return PurchaseRecord.fromMap({'id': doc.id, ...data});
       }).toList();
-      records.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      records.sort((a, b) {
+        final aPending = a.status == 'pending_payment' ? 1 : 0;
+        final bPending = b.status == 'pending_payment' ? 1 : 0;
+        if (aPending != bPending) {
+          return bPending.compareTo(aPending);
+        }
+        return b.createdAt.compareTo(a.createdAt);
+      });
       return records;
     } on FirebaseException catch (error) {
       if (error.code == 'permission-denied') return [];
@@ -141,18 +166,22 @@ class FirebaseDataService {
     }
   }
 
-  Future<void> createOrdersFromCart(
+  Future<List<String>> createOrdersFromCart(
     List<CartItem> items, {
     Map<String, String>? transferNotesBySeller,
+    String status = 'paid',
+    String paymentMethod = 'online',
   }) async {
     final user = _auth.currentUser;
-    if (user == null || items.isEmpty) return;
+    if (user == null || items.isEmpty) return const [];
 
     final batch = _firestore.batch();
     final now = DateTime.now().toIso8601String();
+    final orderIds = <String>[];
 
     for (final item in items) {
       final orderRef = _orders.doc();
+      orderIds.add(orderRef.id);
       batch.set(orderRef, {
         'buyerUid': user.uid,
         'productId': item.product.id,
@@ -165,7 +194,8 @@ class FirebaseDataService {
         'productPrice': item.product.price,
         'quantity': item.quantity,
         'totalPrice': item.totalPrice,
-        'status': 'paid',
+        'status': status,
+        'paymentMethod': paymentMethod,
         'transferNote': transferNotesBySeller?[item.product.sellerUid ?? ''] ?? '',
         'createdAt': now,
       });
@@ -175,7 +205,9 @@ class FirebaseDataService {
       await batch.commit();
     } on FirebaseException catch (error) {
       if (error.code != 'permission-denied') rethrow;
+      return const [];
     }
+    return orderIds;
   }
 
   Future<bool> isFavorite(String productId) async {
@@ -220,10 +252,16 @@ class FirebaseDataService {
     if (user == null) return [];
 
     try {
-      final snapshot = await _favorites.where('userUid', isEqualTo: user.uid).get();
+      final snapshot = await _favorites
+          .where('userUid', isEqualTo: user.uid)
+          .get();
 
       final docs = [...snapshot.docs]
-        ..sort((a, b) => ((b.data()['createdAt'] ?? '') as String).compareTo((a.data()['createdAt'] ?? '') as String));
+        ..sort(
+          (a, b) => ((b.data()['createdAt'] ?? '') as String).compareTo(
+            (a.data()['createdAt'] ?? '') as String,
+          ),
+        );
 
       final favorites = <Product>[];
       for (final doc in docs) {
@@ -239,10 +277,7 @@ class FirebaseDataService {
 
         final cached = data['product'];
         if (cached is Map<String, dynamic>) {
-          favorites.add(Product.fromMap({
-            'id': productId,
-            ...cached,
-          }));
+          favorites.add(Product.fromMap({'id': productId, ...cached}));
         }
       }
       return favorites;
@@ -266,7 +301,7 @@ class FirebaseDataService {
 
   Future<int> getPurchaseCount() async {
     final orders = await getPurchaseHistory();
-    return orders.fold<int>(0, (sum, order) => sum + order.quantity);
+    return orders.fold<int>(0, (total, order) => total + order.quantity);
   }
 
   Future<void> insertProduct(Product product) async {
@@ -274,16 +309,10 @@ class FirebaseDataService {
   }
 
   Product _productFromDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
-    return Product.fromMap({
-      'id': doc.id,
-      ...doc.data(),
-    });
+    return Product.fromMap({'id': doc.id, ...doc.data()});
   }
 
   Product _productFromSnapshot(DocumentSnapshot<Map<String, dynamic>> doc) {
-    return Product.fromMap({
-      'id': doc.id,
-      ...?doc.data(),
-    });
+    return Product.fromMap({'id': doc.id, ...?doc.data()});
   }
 }
