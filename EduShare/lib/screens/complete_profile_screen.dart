@@ -28,6 +28,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   late final TextEditingController _nameCtrl;
   late final TextEditingController _phoneCtrl;
   late final TextEditingController _universityCtrl;
+  late final TextEditingController _shippingAddressCtrl;
   bool _saving = false;
   bool _pickingAvatar = false;
   String? _avatarBase64;
@@ -42,6 +43,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     );
     _phoneCtrl = TextEditingController(text: widget.profile.phone);
     _universityCtrl = TextEditingController(text: widget.profile.university);
+    _shippingAddressCtrl = TextEditingController(
+      text: widget.profile.shippingAddress,
+    );
     _avatarBase64 = widget.profile.avatarBase64;
   }
 
@@ -50,6 +54,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _universityCtrl.dispose();
+    _shippingAddressCtrl.dispose();
     super.dispose();
   }
 
@@ -140,6 +145,20 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                               return null;
                             },
                           ),
+                          const SizedBox(height: 14),
+                          _buildField(
+                            controller: _shippingAddressCtrl,
+                            label: 'Dia chi nhan hang',
+                            hint: 'Nhap dia chi nhan hang',
+                            icon: Icons.location_on_outlined,
+                            maxLines: 3,
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Vui long nhap dia chi nhan hang';
+                              }
+                              return null;
+                            },
+                          ),
                           const SizedBox(height: 18),
                           SizedBox(
                             width: double.infinity,
@@ -190,11 +209,14 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     required String hint,
     required IconData icon,
     TextInputType? keyboardType,
+    int maxLines = 1,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
+      minLines: maxLines > 1 ? 3 : 1,
+      maxLines: maxLines,
       validator: validator,
       decoration: InputDecoration(
         labelText: label,
@@ -267,6 +289,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     widget.profile.name = _nameCtrl.text.trim();
     widget.profile.phone = _phoneCtrl.text.trim();
     widget.profile.university = _universityCtrl.text.trim();
+    widget.profile.shippingAddress = _shippingAddressCtrl.text.trim();
     widget.profile.avatarBase64 = _avatarBase64;
 
     await _dataService.updateUserProfile(widget.profile);

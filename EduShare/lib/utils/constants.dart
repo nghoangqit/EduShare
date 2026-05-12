@@ -16,16 +16,35 @@ class AppColors {
 
 class AppTheme {
   static ThemeData get theme => ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: AppColors.primary,
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-        fontFamily: 'Roboto',
-      );
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: AppColors.primary,
+      brightness: Brightness.light,
+    ),
+    useMaterial3: true,
+    fontFamily: 'Roboto',
+  );
 }
 
 class AppStrings {
   static const String appName = 'EduShare';
-  static const String tagline = 'Tìm sách và dụng cụ học tập';
+  static const String tagline = 'Tim sach va dung cu hoc tap';
+}
+
+class AdminConfig {
+  static const List<String> adminEmails = ['admin@edushare.vn'];
+
+  static const String bankName = 'Viettinbank';
+  static const String bankBin = '970415';
+  static const String bankAccountNumber = '0388431406';
+  static const String bankAccountHolder = 'Tran Ngoc Hoang';
+  static const double walletTopupCreditRate = 0.90;
+  static const double walletTopupFeeRate = 0.10;
+  static const double sellerPayoutRate = 0.95;
+  static const double platformFeeRate = 0.05;
+
+  static bool isAdminEmail(String? email) {
+    final normalized = email?.trim().toLowerCase();
+    if (normalized == null || normalized.isEmpty) return false;
+    return adminEmails.contains(normalized);
+  }
 }

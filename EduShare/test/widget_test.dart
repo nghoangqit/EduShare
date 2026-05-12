@@ -8,10 +8,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.theme,
-        home: const SearchScreen(),
-      ),
+      MaterialApp(theme: AppTheme.theme, home: const SearchScreen()),
     );
     await tester.pumpAndSettle();
 

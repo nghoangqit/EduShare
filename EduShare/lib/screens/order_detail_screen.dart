@@ -5,6 +5,7 @@ import '../models/user_profile.dart';
 import '../services/firebase_data_service.dart';
 import '../utils/constants.dart';
 import '../utils/helpers.dart';
+import 'chat_screen.dart';
 
 class OrderDetailScreen extends StatelessWidget {
   final PurchaseRecord order;
@@ -39,20 +40,10 @@ class OrderDetailScreen extends StatelessWidget {
                   child: SizedBox(
                     width: 86,
                     height: 86,
-                    child: (order.productImageUrl != null &&
-                            order.productImageUrl!.trim().isNotEmpty)
-                        ? Image.network(
-                            order.productImageUrl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Image.asset(
-                              imageForProductType(order.productType),
-                              fit: BoxFit.cover,
-                            ),
-                          )
-                        : Image.asset(
-                            imageForProductType(order.productType),
-                            fit: BoxFit.cover,
-                          ),
+                    child: buildProductImage(
+                      type: order.productType,
+                      imageUrl: order.productImageUrl,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 14),
@@ -125,6 +116,19 @@ class OrderDetailScreen extends StatelessWidget {
                 _infoRow(context, 'So luong', '${order.quantity}'),
                 _infoRow(context, 'Don gia', Formatter.price(order.productPrice)),
                 _infoRow(context, 'Tong tien', Formatter.price(order.totalPrice)),
+                if (order.paymentMethod == 'admin_escrow' ||
+                    order.paymentMethod == 'wallet') ...[
+                  _infoRow(
+                    context,
+                    'Seller nhan',
+                    Formatter.price(order.sellerPayoutAmount),
+                  ),
+                  _infoRow(
+                    context,
+                    'Phi he thong',
+                    Formatter.price(order.platformFeeAmount),
+                  ),
+                ],
                 if (order.transferNote.trim().isNotEmpty)
                   _infoRow(
                     context,
@@ -132,6 +136,41 @@ class OrderDetailScreen extends StatelessWidget {
                     order.transferNote,
                     copyValue: order.transferNote,
                   ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          _sectionCard(
+            title: 'Nhan hang',
+            child: Column(
+              children: [
+                _infoRow(
+                  context,
+                  'Nguoi nhan',
+                  order.recipientName.trim().isEmpty
+                      ? 'Chua cap nhat'
+                      : order.recipientName,
+                ),
+                _infoRow(
+                  context,
+                  'So dien thoai',
+                  order.recipientPhone.trim().isEmpty
+                      ? 'Chua cap nhat'
+                      : order.recipientPhone,
+                  copyValue: order.recipientPhone.trim().isEmpty
+                      ? null
+                      : order.recipientPhone,
+                ),
+                _infoRow(
+                  context,
+                  'Dia chi',
+                  order.shippingAddress.trim().isEmpty
+                      ? 'Chua cap nhat'
+                      : order.shippingAddress,
+                  copyValue: order.shippingAddress.trim().isEmpty
+                      ? null
+                      : order.shippingAddress,
+                ),
               ],
             ),
           ),
@@ -199,9 +238,41 @@ class OrderDetailScreen extends StatelessWidget {
                         seller.bankAccountHolder,
                       ),
                     ],
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _openOrderChat(
+                          context,
+                          sellerProfile: seller,
+                        ),
+                        icon: const Icon(Icons.chat_bubble_outline_rounded),
+                        label: Text(
+                          _dataService.currentUserId == order.sellerUid
+                              ? 'Chat voi nguoi mua'
+                              : 'Chat voi nguoi ban',
+                        ),
+                      ),
+                    ),
                   ],
                 );
               },
+            ),
+          ),
+          const SizedBox(height: 16),
+          _sectionCard(
+            title: 'Ho tro EduShare',
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _openAdminChat(context),
+                icon: const Icon(Icons.support_agent_rounded),
+                label: const Text('Chat voi admin'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryDark,
+                  foregroundColor: Colors.white,
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -218,16 +289,12 @@ class OrderDetailScreen extends StatelessWidget {
                   ),
                 ),
                 _timelineTile(
-                  icon: order.status == 'paid'
+                  icon: order.status == 'paid' || order.status == 'completed'
                       ? Icons.check_circle_rounded
                       : Icons.schedule_rounded,
                   color: _statusColor(order.status),
                   title: _statusLabel(order.status),
-                  subtitle: order.status == 'pending_payment'
-                      ? 'Don dang cho backend xac nhan thanh toan chuyen khoan ngan hang.'
-                      : order.status == 'pending_cod'
-                          ? 'Don se duoc thanh toan khi nhan hang.'
-                          : 'Giao dich da duoc ghi nhan thanh cong.',
+                  subtitle: _timelineSubtitle(),
                   isLast: true,
                 ),
               ],
@@ -490,6 +557,8 @@ class OrderDetailScreen extends StatelessWidget {
     return switch (paymentMethod) {
       'cod' => 'Thanh toan khi nhan hang',
       'free' => 'Don mien phi',
+      'admin_escrow' => 'Ky quy qua admin',
+      'wallet' => 'Thanh toan bang vi EduShare',
       'online' => 'Thanh toan QR ngan hang',
       _ => 'Thanh toan',
     };
@@ -498,8 +567,12 @@ class OrderDetailScreen extends StatelessWidget {
   String _statusLabel(String status) {
     return switch (status) {
       'paid' => 'Da thanh toan',
+      'completed' => 'Hoan tat',
       'pending_cod' => 'Dang cho giao COD',
       'pending_payment' => 'Cho xac nhan thanh toan',
+      'pending_admin_confirmation' => 'Cho admin xac nhan tien',
+      'awaiting_shipment' => 'Cho nguoi ban giao hang',
+      'delivered_pending_release' => 'Cho cong tien vao vi',
       _ => repairVietnamese(status),
     };
   }
@@ -507,8 +580,12 @@ class OrderDetailScreen extends StatelessWidget {
   String _statusShort(String status) {
     return switch (status) {
       'paid' => 'PAID',
+      'completed' => 'DONE',
       'pending_cod' => 'COD',
       'pending_payment' => 'PENDING',
+      'pending_admin_confirmation' => 'ADMIN',
+      'awaiting_shipment' => 'SHIP',
+      'delivered_pending_release' => 'WALLET',
       _ => status.toUpperCase(),
     };
   }
@@ -516,8 +593,12 @@ class OrderDetailScreen extends StatelessWidget {
   IconData _statusIcon(String status) {
     return switch (status) {
       'paid' => Icons.check_circle_rounded,
+      'completed' => Icons.verified_rounded,
       'pending_cod' => Icons.local_shipping_rounded,
       'pending_payment' => Icons.schedule_rounded,
+      'pending_admin_confirmation' => Icons.admin_panel_settings_outlined,
+      'awaiting_shipment' => Icons.inventory_2_outlined,
+      'delivered_pending_release' => Icons.account_balance_wallet_outlined,
       _ => Icons.receipt_long_rounded,
     };
   }
@@ -525,9 +606,154 @@ class OrderDetailScreen extends StatelessWidget {
   Color _statusColor(String status) {
     return switch (status) {
       'paid' => Colors.green,
+      'completed' => Colors.green,
       'pending_cod' => AppColors.blue,
       'pending_payment' => AppColors.amber,
+      'pending_admin_confirmation' => AppColors.amber,
+      'awaiting_shipment' => AppColors.blue,
+      'delivered_pending_release' => AppColors.purple,
       _ => AppColors.textGray,
     };
+  }
+
+  String _timelineSubtitle() {
+    return switch (order.status) {
+      'pending_admin_confirmation' =>
+        'Admin dang cho xac nhan tien da vao tai khoan trung gian.',
+      'awaiting_shipment' =>
+        'Don da duoc thanh toan bang vi EduShare va dang cho nguoi ban giao hang.',
+      'delivered_pending_release' =>
+        'Don da giao xong va admin dang cong 95% gia tri don vao vi EduShare cua nguoi ban.',
+      'pending_payment' =>
+        'Don dang cho backend xac nhan thanh toan chuyen khoan ngan hang.',
+      'pending_cod' => 'Don se duoc thanh toan khi nhan hang.',
+      'completed' => order.payoutMessage.trim().isEmpty
+          ? 'Don da hoan tat va nguoi ban da duoc cong tien vao vi EduShare.'
+          : order.payoutMessage,
+      _ => 'Giao dich da duoc ghi nhan thanh cong.',
+    };
+  }
+
+  Future<void> _openAdminChat(BuildContext context) async {
+    final admin = await _dataService.getPrimaryAdminProfile();
+    if (!context.mounted) return;
+    if (admin == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Chua tim thay admin de ho tro luc nay.'),
+          backgroundColor: AppColors.red,
+        ),
+      );
+      return;
+    }
+    if (_dataService.currentUserId == admin.id) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ban dang su dung tai khoan admin.'),
+          backgroundColor: AppColors.amber,
+        ),
+      );
+      return;
+    }
+
+    final conversationId = await _dataService.ensureAdminConversation(
+      topic: 'Ho tro don hang ${order.id}',
+    );
+    if (!context.mounted) return;
+    if (conversationId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Khong the khoi tao doan chat voi admin luc nay.'),
+          backgroundColor: AppColors.red,
+        ),
+      );
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          sellerUid: admin.id,
+          sellerName: admin.name,
+          productId: 'support_admin',
+          productTitle: 'Ho tro don hang ${order.id}',
+          productType: 'dung_cu',
+          conversationId: conversationId,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openOrderChat(
+    BuildContext context, {
+    required UserProfile? sellerProfile,
+  }) async {
+    final currentUserId = _dataService.currentUserId;
+    if (currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vui long dang nhap lai de su dung tinh nang chat.'),
+          backgroundColor: AppColors.red,
+        ),
+      );
+      return;
+    }
+
+    final isSellerViewingOwnOrder = currentUserId == order.sellerUid;
+    final partnerUid = isSellerViewingOwnOrder ? order.buyerUid : order.sellerUid;
+    if (partnerUid.trim().isEmpty || partnerUid == currentUserId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Khong tim thay doi tuong de bat dau doan chat.'),
+          backgroundColor: AppColors.red,
+        ),
+      );
+      return;
+    }
+
+    final partnerProfile = await _dataService.getUserProfileById(partnerUid);
+    if (!context.mounted) return;
+
+    final partnerName = isSellerViewingOwnOrder
+        ? (partnerProfile?.name.trim().isNotEmpty == true
+              ? partnerProfile!.name
+              : 'Nguoi mua')
+        : (sellerProfile?.name.trim().isNotEmpty == true
+              ? sellerProfile!.name
+              : order.productAuthor);
+
+    final conversationId = await _dataService.ensureConversation(
+      sellerUid: partnerUid,
+      sellerName: partnerName,
+      productId: order.productId,
+      productTitle: order.productTitle,
+      productType: order.productType,
+      productImageUrl: order.productImageUrl,
+    );
+
+    if (!context.mounted) return;
+    if (conversationId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Khong the khoi tao doan chat luc nay.'),
+          backgroundColor: AppColors.red,
+        ),
+      );
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          sellerUid: partnerUid,
+          sellerName: partnerName,
+          productId: order.productId,
+          productTitle: order.productTitle,
+          productType: order.productType,
+          productImageUrl: order.productImageUrl,
+          conversationId: conversationId,
+        ),
+      ),
+    );
   }
 }

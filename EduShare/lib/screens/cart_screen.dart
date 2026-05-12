@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../models/cart_item.dart';
-import '../models/user_profile.dart';
-import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
 import '../services/firebase_data_service.dart';
 import '../utils/constants.dart';
@@ -587,6 +584,13 @@ class _CartScreenState extends State<CartScreen> {
 
   Future<void> _checkout(CartProvider cart) async {
     setState(() => _processingOrder = true);
+    final readyForDelivery = await _ensureShippingInfo();
+    if (!mounted) return;
+    if (!readyForDelivery) {
+      setState(() => _processingOrder = false);
+      return;
+    }
+
     final payableItems = cart.items
         .where((item) => !item.product.isFree)
         .toList();
@@ -616,15 +620,153 @@ class _CartScreenState extends State<CartScreen> {
       );
       return;
     }
+    await _payWithWallet(cart);
+  }
 
-    final groups = await _buildSellerGroups(cart.items);
-    if (!mounted) return;
+  Future<bool> _ensureShippingInfo() async {
+    final profile = await _dataService.getCurrentUserProfile();
+    if (profile == null) return false;
 
-    setState(() => _processingOrder = false);
-    final approved = await _showTransferSheet(groups);
-    if (!mounted) return;
-    if (approved != true) return;
-    await _createPendingOnlineOrders(cart, groups);
+    final nameCtrl = TextEditingController(text: profile.name);
+    final phoneCtrl = TextEditingController(text: profile.phone);
+    final addressCtrl = TextEditingController(text: profile.shippingAddress);
+
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final hasEnoughInfo =
+                nameCtrl.text.trim().isNotEmpty &&
+                phoneCtrl.text.trim().isNotEmpty &&
+                addressCtrl.text.trim().isNotEmpty;
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Thong tin nhan hang',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Xac nhan nguoi nhan, so dien thoai va dia chi de nguoi ban co the giao hang dung noi.',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: AppColors.textGray,
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _shippingField(
+                        label: 'Nguoi nhan',
+                        controller: nameCtrl,
+                        icon: Icons.person_outline_rounded,
+                        onChanged: (_) => setSheetState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+                      _shippingField(
+                        label: 'So dien thoai',
+                        controller: phoneCtrl,
+                        icon: Icons.phone_outlined,
+                        keyboardType: TextInputType.phone,
+                        onChanged: (_) => setSheetState(() {}),
+                      ),
+                      const SizedBox(height: 12),
+                      _shippingField(
+                        label: 'Dia chi nhan hang',
+                        controller: addressCtrl,
+                        icon: Icons.location_on_outlined,
+                        maxLines: 3,
+                        onChanged: (_) => setSheetState(() {}),
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: !hasEnoughInfo
+                              ? null
+                              : () async {
+                                  profile
+                                    ..name = nameCtrl.text.trim()
+                                    ..phone = phoneCtrl.text.trim()
+                                    ..shippingAddress =
+                                        addressCtrl.text.trim();
+                                  await _dataService.updateUserProfile(profile);
+                                  if (!context.mounted) return;
+                                  Navigator.pop(context, true);
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size.fromHeight(50),
+                          ),
+                          child: const Text('Xac nhan thong tin'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    nameCtrl.dispose();
+    phoneCtrl.dispose();
+    addressCtrl.dispose();
+
+    return result ?? false;
+  }
+
+  Widget _shippingField({
+    required String label,
+    required TextEditingController controller,
+    required IconData icon,
+    TextInputType? keyboardType,
+    int maxLines = 1,
+    ValueChanged<String>? onChanged,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      minLines: maxLines > 1 ? 3 : 1,
+      maxLines: maxLines,
+      onChanged: onChanged,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: AppColors.primary),
+        filled: true,
+        fillColor: const Color(0xFFF7FAFB),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
+        ),
+      ),
+    );
   }
 
   Future<void> _completeOrder(
@@ -646,396 +788,45 @@ class _CartScreenState extends State<CartScreen> {
     _showOrderSuccess();
   }
 
-  Future<void> _createPendingOnlineOrders(
-    CartProvider cart,
-    List<_SellerPaymentGroup> groups,
-  ) async {
-    final transferNotesBySeller = {
-      for (final group in groups) group.sellerUid: group.transferNote,
-    };
-
-    setState(() => _processingOrder = true);
-    final orderIds = await _dataService.createOrdersFromCart(
-      cart.items,
-      transferNotesBySeller: transferNotesBySeller,
-      status: 'pending_payment',
-      paymentMethod: 'online',
-    );
-    await cart.clearCart();
-    if (!mounted) return;
-    setState(() => _processingOrder = false);
-
-    final totalAmount = groups.fold<double>(
+  Future<void> _payWithWallet(CartProvider cart) async {
+    final profile = await _dataService.getCurrentUserProfile();
+    final balance = profile?.walletBalance ?? 0;
+    final totalAmount = cart.items.fold<double>(
       0,
-      (sum, group) => sum + group.totalAmount,
+      (total, item) => total + item.totalPrice,
     );
 
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => _PendingPaymentScreen(
-          groups: groups,
-          orderCount: orderIds.length,
-          totalAmount: totalAmount,
+    if (balance < totalAmount) {
+      if (!mounted) return;
+      setState(() => _processingOrder = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'So du vi khong du. Hien co ${Formatter.price(balance)}, can ${Formatter.price(totalAmount)}.',
+          ),
+          backgroundColor: AppColors.red,
         ),
-      ),
-    );
-  }
-
-  Future<List<_SellerPaymentGroup>> _buildSellerGroups(
-    List<CartItem> items,
-  ) async {
-    final grouped = <String, List<CartItem>>{};
-    for (final item in items.where((entry) => !entry.product.isFree)) {
-      final sellerUid = item.product.sellerUid ?? 'unknown';
-      grouped.putIfAbsent(sellerUid, () => []).add(item);
+      );
+      return;
     }
 
-    final groups = <_SellerPaymentGroup>[];
-    for (final entry in grouped.entries) {
-      final sellerProfile = await _dataService.getUserProfileById(entry.key);
-      final totalAmount = entry.value.fold<double>(
-        0,
-        (total, item) => total + item.totalPrice,
-      );
-      final transferNote = _buildTransferNote(entry.key);
-      groups.add(
-        _SellerPaymentGroup(
-          sellerUid: entry.key,
-          sellerName: sellerProfile?.name.trim().isNotEmpty == true
-              ? sellerProfile!.name
-              : entry.value.first.product.author,
-          sellerProfile: sellerProfile,
-          items: entry.value,
-          totalAmount: totalAmount,
-          transferNote: transferNote,
+    try {
+      setState(() => _processingOrder = true);
+      await _dataService.createWalletPaidOrdersFromCart(cart.items);
+      await cart.clearCart();
+      if (!mounted) return;
+      setState(() => _processingOrder = false);
+      _showOrderSuccess();
+    } on StateError {
+      if (!mounted) return;
+      setState(() => _processingOrder = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('So du vi da thay doi. Vui long thu lai.'),
+          backgroundColor: AppColors.red,
         ),
       );
     }
-    return groups;
-  }
-
-  String _buildTransferNote(String sellerUid) {
-    final buyerUid = context.read<AuthProvider>().currentUser?.uid ?? 'buyer';
-    final sellerPart = sellerUid.length > 6
-        ? sellerUid.substring(0, 6)
-        : sellerUid;
-    final buyerPart = buyerUid.length > 6 ? buyerUid.substring(0, 6) : buyerUid;
-    return 'EDUSHARE-$buyerPart-$sellerPart';
-  }
-
-  String _buildVietQrUrl(_SellerPaymentGroup group) {
-    final profile = group.sellerProfile;
-    if (profile == null || !profile.hasBankAccount) return '';
-
-    final amount = group.totalAmount.round();
-    final encodedInfo = Uri.encodeComponent(group.transferNote);
-    final encodedName = Uri.encodeComponent(profile.bankAccountHolder);
-    return 'https://img.vietqr.io/image/'
-        '${profile.bankBin}-${profile.bankAccountNumber}-compact2.png'
-        '?amount=$amount&addInfo=$encodedInfo&accountName=$encodedName';
-  }
-
-  Future<bool?> _showTransferSheet(
-    List<_SellerPaymentGroup> groups,
-  ) {
-    final validGroups = groups
-        .where((group) => group.sellerProfile?.hasBankAccount == true)
-        .length;
-
-    return showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, _) {
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.86,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    margin: const EdgeInsets.only(top: 12),
-                    width: 42,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-                      children: [
-                        const Text(
-                          'Thanh toan bang QR ngan hang',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textDark,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          validGroups == groups.length
-                              ? 'Moi nguoi ban co tai khoan ngan hang rieng. Ban co the quet QR tung nguoi ban, sau do tao don o trang thai cho xac nhan thanh toan.'
-                              : 'Can nguoi ban cap nhat day du thong tin ngan hang truoc khi thanh toan.',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textGray,
-                            height: 1.45,
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        ...groups.map((group) {
-                          final profile = group.sellerProfile;
-                          final hasBank = profile?.hasBankAccount == true;
-                          final bankProfile = hasBank ? profile! : null;
-                          final qrUrl = hasBank ? _buildVietQrUrl(group) : '';
-
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 16),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8FBFC),
-                              borderRadius: BorderRadius.circular(24),
-                              border: Border.all(
-                                color: AppColors.primary.withValues(alpha: 0.08),
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Container(
-                                      width: 44,
-                                      height: 44,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primaryLight,
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      child: const Icon(
-                                        Icons.account_balance_wallet_outlined,
-                                        color: AppColors.primary,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            group.sellerName,
-                                            style: const TextStyle(
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.w800,
-                                              color: AppColors.textDark,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 3),
-                                          Text(
-                                            '${group.items.length} san pham - ${Formatter.price(group.totalAmount)}',
-                                            style: const TextStyle(
-                                              fontSize: 12.5,
-                                              color: AppColors.textGray,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 14),
-                                if (!hasBank)
-                                  Container(
-                                    padding: const EdgeInsets.all(14),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFFFF5F5),
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: const Text(
-                                      'Nguoi ban chua cap nhat day du thong tin ngan hang. Ban chua the thanh toan online cho don nay.',
-                                      style: TextStyle(
-                                        color: AppColors.red,
-                                        fontSize: 12.5,
-                                        height: 1.35,
-                                      ),
-                                    ),
-                                  )
-                                else ...[
-                                  Center(
-                                    child: Container(
-                                      width: 250,
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 18,
-                                        vertical: 18,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF7FBFF),
-                                        borderRadius: BorderRadius.circular(20),
-                                        border: Border.all(
-                                          color: const Color(0xFFB7D3F2),
-                                        ),
-                                      ),
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          ClipRRect(
-                                            borderRadius: BorderRadius.circular(
-                                              16,
-                                            ),
-                                            child: Image.network(
-                                              qrUrl,
-                                              width: 180,
-                                              height: 180,
-                                              fit: BoxFit.cover,
-                                              errorBuilder:
-                                                  (_, __, ___) => Container(
-                                                    width: 180,
-                                                    height: 180,
-                                                    color: Colors.white,
-                                                    alignment: Alignment.center,
-                                                    child: const Icon(
-                                                      Icons.qr_code_2_rounded,
-                                                      size: 72,
-                                                      color: AppColors.primary,
-                                                    ),
-                                                  ),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 12),
-                                          const Text(
-                                            'QR chuyen khoan',
-                                            style: TextStyle(
-                                              fontSize: 20,
-                                              fontWeight: FontWeight.w800,
-                                              color: AppColors.primary,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 6),
-                                          const Text(
-                                            'Quet ma de chuyen khoan dung so tien va noi dung.',
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              color: AppColors.textGray,
-                                              fontSize: 12.5,
-                                              height: 1.35,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 14),
-                                  _paymentInfoRow(
-                                    'Ngan hang',
-                                    bankProfile!.bankName,
-                                  ),
-                                  _paymentInfoRow(
-                                    'Ma BIN',
-                                    bankProfile.bankBin,
-                                  ),
-                                  _paymentInfoRow(
-                                    'So tai khoan',
-                                    bankProfile.bankAccountNumber,
-                                    copyValue: bankProfile.bankAccountNumber,
-                                  ),
-                                  _paymentInfoRow(
-                                    'Chu tai khoan',
-                                    bankProfile.bankAccountHolder,
-                                  ),
-                                  _paymentInfoRow(
-                                    'Noi dung CK',
-                                    group.transferNote,
-                                    copyValue: group.transferNote,
-                                  ),
-                                  _paymentInfoRow(
-                                    'So tien',
-                                    Formatter.price(group.totalAmount),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF8FAFC),
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                    child: const Text(
-                                      'App hien tao don o trang thai cho xac nhan thanh toan. Khi backend doi soat giao dich duoc tich hop, he thong se tu dong doi sang da thanh toan sau khi nhan xac nhan hop le.',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.textGray,
-                                        height: 1.4,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          );
-                        }),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.06),
-                          blurRadius: 14,
-                          offset: const Offset(0, -2),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: double.infinity,
-                          height: 50,
-                          child: ElevatedButton(
-                            onPressed: validGroups == groups.length
-                                ? () => Navigator.pop(sheetContext, true)
-                                : null,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              elevation: 0,
-                            ),
-                            child: const Text(
-                              'Tao don cho xac nhan',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        TextButton(
-                          onPressed: () => Navigator.pop(sheetContext),
-                          child: const Text('Dong'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
   }
 
   Future<String?> _showPaymentMethodSheet(CartProvider cart) {
@@ -1075,10 +866,7 @@ class _CartScreenState extends State<CartScreen> {
               const SizedBox(height: 8),
               Text(
                 'Don hang cua ban: ${Formatter.price(totalPrice)}',
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textGray,
-                ),
+                style: const TextStyle(fontSize: 13, color: AppColors.textGray),
               ),
               const SizedBox(height: 18),
               _paymentMethodTile(
@@ -1090,11 +878,12 @@ class _CartScreenState extends State<CartScreen> {
               ),
               const SizedBox(height: 12),
               _paymentMethodTile(
-                icon: Icons.qr_code_2_rounded,
-                title: 'Thanh toan online',
-                subtitle: 'Quet QR chuyen khoan ngan hang theo thong tin tung nguoi ban.',
+                icon: Icons.account_balance_wallet_outlined,
+                title: 'Thanh toan bang vi EduShare',
+                subtitle:
+                    'Su dung so du vi de thanh toan ngay. Nap 100k se duoc cong 90k vao vi.',
                 accent: AppColors.primary,
-                onTap: () => Navigator.pop(sheetContext, 'online'),
+                onTap: () => Navigator.pop(sheetContext, 'wallet'),
               ),
               const SizedBox(height: 14),
               SizedBox(
@@ -1173,52 +962,6 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Widget _paymentInfoRow(String label, String value, {String? copyValue}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 88,
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 12.5, color: AppColors.textGray),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 12.8,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textDark,
-              ),
-            ),
-          ),
-          if (copyValue != null)
-            IconButton(
-              onPressed: () async {
-                await Clipboard.setData(ClipboardData(text: copyValue));
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Da sao chep thong tin thanh toan.'),
-                    duration: Duration(milliseconds: 900),
-                  ),
-                );
-              },
-              icon: const Icon(
-                Icons.copy_rounded,
-                size: 18,
-                color: AppColors.primary,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
   void _showOrderSuccess() {
     showDialog(
       context: context,
@@ -1291,267 +1034,6 @@ class _CartScreenState extends State<CartScreen> {
   }
 }
 
-class _SellerPaymentGroup {
-  final String sellerUid;
-  final String sellerName;
-  final UserProfile? sellerProfile;
-  final List<CartItem> items;
-  final double totalAmount;
-  final String transferNote;
-
-  const _SellerPaymentGroup({
-    required this.sellerUid,
-    required this.sellerName,
-    required this.sellerProfile,
-    required this.items,
-    required this.totalAmount,
-    required this.transferNote,
-  });
-}
-
-class _PendingPaymentScreen extends StatelessWidget {
-  final List<_SellerPaymentGroup> groups;
-  final int orderCount;
-  final double totalAmount;
-
-  const _PendingPaymentScreen({
-    required this.groups,
-    required this.orderCount,
-    required this.totalAmount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.bg,
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        title: const Text('Cho xac nhan thanh toan'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(22, 24, 22, 22),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 18,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Container(
-                  width: 92,
-                  height: 92,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFFEFF7FF),
-                    border: Border.all(color: const Color(0xFFB7D3F2)),
-                  ),
-                  child: const Icon(
-                    Icons.account_balance_rounded,
-                    size: 44,
-                    color: AppColors.primary,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                const Text(
-                  'Don da duoc tao',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textDark,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'He thong dang cho backend xac nhan giao dich chuyen khoan ngan hang. Don hang se chuyen sang da thanh toan sau khi giao dich hop le duoc ghi nhan.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: AppColors.textGray,
-                    fontSize: 13,
-                    height: 1.45,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _pendingMetric(
-                        label: 'So don',
-                        value: '$orderCount',
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _pendingMetric(
-                        label: 'Tong tien',
-                        value: Formatter.price(totalAmount),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          ...groups.map(
-            (group) => Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    group.sellerName,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  if (group.sellerProfile?.hasBankAccount == true) ...[
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.network(
-                        'https://img.vietqr.io/image/'
-                        '${group.sellerProfile!.bankBin}-${group.sellerProfile!.bankAccountNumber}-compact2.png'
-                        '?amount=${group.totalAmount.round()}'
-                        '&addInfo=${Uri.encodeComponent(group.transferNote)}'
-                        '&accountName=${Uri.encodeComponent(group.sellerProfile!.bankAccountHolder)}',
-                        height: 170,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          height: 170,
-                          color: const Color(0xFFF7FBFF),
-                          alignment: Alignment.center,
-                          child: const Icon(
-                            Icons.qr_code_2_rounded,
-                            size: 72,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  Text(
-                    'Ngan hang: ${group.sellerProfile?.bankName ?? ''}',
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'So tai khoan: ${group.sellerProfile?.bankAccountNumber ?? ''}',
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Chu tai khoan: ${group.sellerProfile?.bankAccountHolder ?? ''}',
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Noi dung GD: ${group.transferNote}',
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'So tien: ${Formatter.price(group.totalAmount)}',
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 6),
-          SizedBox(
-            height: 52,
-            child: ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              child: const Text(
-                'Da hieu',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _pendingMetric({
-    required String label,
-    required String value,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textGray,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textDark,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _SuccessCheckmark extends StatefulWidget {
   const _SuccessCheckmark();
 
@@ -1572,14 +1054,8 @@ class _SuccessCheckmarkState extends State<_SuccessCheckmark>
       vsync: this,
       duration: const Duration(milliseconds: 650),
     );
-    _scale = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.elasticOut,
-    );
-    _fade = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOut,
-    );
+    _scale = CurvedAnimation(parent: _controller, curve: Curves.elasticOut);
+    _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
     _controller.forward();
   }
 

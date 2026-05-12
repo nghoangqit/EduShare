@@ -6,10 +6,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../models/user_profile.dart';
+import '../models/wallet_request.dart';
 import '../providers/auth_provider.dart';
 import '../services/firebase_data_service.dart';
 import '../utils/constants.dart';
 import '../utils/helpers.dart';
+import 'admin_dashboard_screen.dart';
+import 'chat_list_screen.dart';
+import 'chat_screen.dart';
 import 'product_collection_screen.dart';
 import 'purchase_history_screen.dart';
 
@@ -101,6 +105,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: const Text('Ho so'),
         actions: [
           IconButton(
+            onPressed: () {
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => ChatListScreen()));
+            },
+            icon: const Icon(Icons.chat_bubble_outline_rounded),
+          ),
+          IconButton(
             onPressed: _showEditProfile,
             icon: const Icon(Icons.edit_outlined),
           ),
@@ -114,7 +126,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             _buildHeroCard(profile),
             const SizedBox(height: 16),
-            _buildQuickActions(),
+            _buildQuickActions(profile),
+            const SizedBox(height: 16),
+            _walletCard(profile),
             const SizedBox(height: 16),
             Row(
               children: [
@@ -155,9 +169,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _infoRow('Ho va ten', profile.name),
                   _infoRow('Email', profile.email, copyValue: profile.email),
                   _infoRow(
+                    'So du vi',
+                    Formatter.price(profile.walletBalance),
+                    copyValue: profile.walletBalance.toStringAsFixed(0),
+                  ),
+                  _infoRow(
                     'So dien thoai',
-                    profile.phone.trim().isEmpty ? 'Chua cap nhat' : profile.phone,
-                    copyValue: profile.phone.trim().isEmpty ? null : profile.phone,
+                    profile.phone.trim().isEmpty
+                        ? 'Chua cap nhat'
+                        : profile.phone,
+                    copyValue: profile.phone.trim().isEmpty
+                        ? null
+                        : profile.phone,
                   ),
                   _infoRow(
                     'Truong',
@@ -165,13 +188,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ? 'Chua cap nhat'
                         : profile.university,
                   ),
+                  _infoRow(
+                    'Dia chi nhan hang',
+                    profile.shippingAddress.trim().isEmpty
+                        ? 'Chua cap nhat'
+                        : profile.shippingAddress,
+                    copyValue: profile.shippingAddress.trim().isEmpty
+                        ? null
+                        : profile.shippingAddress,
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
             _sectionCard(
-              title: 'Thanh toan ngan hang',
-              subtitle: 'Thong tin nay duoc dung de tao QR chuyen khoan cho nguoi mua.',
+              title: 'Tai khoan rut tien',
+              subtitle:
+                  'Thong tin ngan hang nay duoc admin dung de chuyen tien cho ban khi ban tao yeu cau rut tu vi EduShare.',
               child: Column(
                 children: [
                   _bankHighlight(profile),
@@ -211,7 +244,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       icon: const Icon(Icons.account_balance_outlined),
                       label: Text(
                         profile.hasBankAccount
-                            ? 'Chinh sua thong tin ngan hang'
+                            ? 'Chinh sua tai khoan rut tien'
                             : 'Them thong tin ngan hang',
                       ),
                     ),
@@ -321,7 +354,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
                   _statusChip(
-                    label: profile.hasBankAccount ? 'QR READY' : 'CAN CAP NHAT',
+                    label: profile.hasBankAccount
+                        ? 'RUT SAN SANG'
+                        : 'CAN CAP NHAT',
                     color: profile.hasBankAccount
                         ? const Color(0xFFD1FAE5)
                         : const Color(0xFFFFE6B5),
@@ -444,38 +479,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildQuickActions() {
-    return Row(
+  Widget _buildQuickActions(UserProfile profile) {
+    return Column(
       children: [
-        Expanded(
-          child: _shortcutTile(
-            icon: Icons.history_rounded,
-            title: 'Lich su',
-            subtitle: 'Don mua',
-            color: AppColors.primary,
-            onTap: _openPurchaseHistory,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _shortcutTile(
+                icon: Icons.history_rounded,
+                title: 'Lich su',
+                subtitle: 'Don mua',
+                color: AppColors.primary,
+                onTap: _openPurchaseHistory,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _shortcutTile(
+                icon: Icons.storefront_outlined,
+                title: 'Dang ban',
+                subtitle: 'San pham',
+                color: AppColors.blue,
+                onTap: _openSellingProducts,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _shortcutTile(
+                icon: Icons.favorite_outline_rounded,
+                title: 'Da luu',
+                subtitle: 'Yeu thich',
+                color: AppColors.red,
+                onTap: _openFavoriteProducts,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _shortcutTile(
-            icon: Icons.storefront_outlined,
-            title: 'Dang ban',
-            subtitle: 'San pham',
-            color: AppColors.blue,
-            onTap: _openSellingProducts,
+        if (!profile.isAdmin) ...[
+          const SizedBox(height: 12),
+          _shortcutTile(
+            icon: Icons.support_agent_rounded,
+            title: 'Chat admin',
+            subtitle: 'Ho tro tai khoan, vi va don hang',
+            color: AppColors.primaryDark,
+            onTap: _openAdminSupportChat,
+            expanded: false,
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _shortcutTile(
-            icon: Icons.favorite_outline_rounded,
-            title: 'Da luu',
-            subtitle: 'Yeu thich',
-            color: AppColors.red,
-            onTap: _openFavoriteProducts,
+        ],
+        if (profile.isAdmin) ...[
+          const SizedBox(height: 12),
+          _shortcutTile(
+            icon: Icons.admin_panel_settings_outlined,
+            title: 'Quan tri',
+            subtitle: 'User, san pham, vi va don hang',
+            color: AppColors.amber,
+            onTap: _openAdminDashboard,
+            expanded: false,
           ),
-        ),
+        ],
       ],
     );
   }
@@ -523,10 +584,124 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 4),
           Text(
             label,
+            style: const TextStyle(fontSize: 12.5, color: AppColors.textGray),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _walletCard(UserProfile profile) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0F172A), Color(0xFF134E4A), Color(0xFF0D9488)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(26),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Vi EduShare',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Nap 100k vao vi se duoc cong 90k de su dung trong he thong.',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12.5,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Text(
+            Formatter.price(profile.walletBalance),
             style: const TextStyle(
-              fontSize: 12.5,
-              color: AppColors.textGray,
+              color: Colors.white,
+              fontSize: 28,
+              fontWeight: FontWeight.w900,
             ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'So du hien tai co the dung de thanh toan hoac tao yeu cau rut tien.',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.82),
+              fontSize: 12.5,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _showWalletDepositSheet,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppColors.primary,
+                    elevation: 0,
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  icon: const Icon(Icons.add_circle_outline_rounded),
+                  label: const Text('Nap tien'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _showWalletWithdrawSheet,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.45),
+                    ),
+                    minimumSize: const Size.fromHeight(48),
+                  ),
+                  icon: const Icon(Icons.north_east_rounded),
+                  label: const Text('Rut tien'),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -586,6 +761,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String subtitle,
     required Color color,
     required VoidCallback onTap,
+    bool expanded = true,
   }) {
     return InkWell(
       onTap: onTap,
@@ -628,10 +804,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 4),
             Text(
               subtitle,
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.textGray,
-              ),
+              style: const TextStyle(fontSize: 12, color: AppColors.textGray),
             ),
           ],
         ),
@@ -646,14 +819,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: profile.hasBankAccount
-              ? [
-                  const Color(0xFFE8FFF9),
-                  const Color(0xFFF5FFFC),
-                ]
-              : [
-                  const Color(0xFFFFF8E7),
-                  const Color(0xFFFFFCF3),
-                ],
+              ? [const Color(0xFFE8FFF9), const Color(0xFFF5FFFC)]
+              : [const Color(0xFFFFF8E7), const Color(0xFFFFFCF3)],
         ),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
@@ -689,8 +856,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 Text(
                   profile.hasBankAccount
-                      ? 'San sang tao QR thanh toan'
-                      : 'Chua du thong tin de tao QR',
+                      ? 'San sang nhan tien rut'
+                      : 'Chua du thong tin rut tien',
                   style: const TextStyle(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w800,
@@ -700,8 +867,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 4),
                 Text(
                   profile.hasBankAccount
-                      ? 'Nguoi mua co the quet QR va chuyen tien dung thong tin tai khoan cua ban.'
-                      : 'Cap nhat day du ngan hang, BIN, so tai khoan va ten chu tai khoan.',
+                      ? 'Admin se dung thong tin nay de chuyen tien khi ban gui yeu cau rut tu vi EduShare.'
+                      : 'Cap nhat day du ngan hang, BIN, so tai khoan va ten chu tai khoan de co the rut tien.',
                   style: const TextStyle(
                     fontSize: 12.5,
                     color: AppColors.textGray,
@@ -783,69 +950,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _menuTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Ink(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FBFC),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: AppColors.primaryLight,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, color: AppColors.primary),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      color: AppColors.textGray,
-                      height: 1.35,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(
-              Icons.arrow_forward_ios_rounded,
-              size: 15,
-              color: AppColors.textGray,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _infoRow(String label, String value, {String? copyValue}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -856,10 +960,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             width: 98,
             child: Text(
               label,
-              style: const TextStyle(
-                fontSize: 12.5,
-                color: AppColors.textGray,
-              ),
+              style: const TextStyle(fontSize: 12.5, color: AppColors.textGray),
             ),
           ),
           Expanded(
@@ -901,6 +1002,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final nameCtrl = TextEditingController(text: _profile!.name);
     final phoneCtrl = TextEditingController(text: _profile!.phone);
     final uniCtrl = TextEditingController(text: _profile!.university);
+    final shippingAddressCtrl = TextEditingController(
+      text: _profile!.shippingAddress,
+    );
     final bankNameCtrl = TextEditingController(text: _profile!.bankName);
     final bankBinCtrl = TextEditingController(text: _profile!.bankBin);
     final bankNumberCtrl = TextEditingController(
@@ -956,14 +1060,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   type: TextInputType.phone,
                 ),
                 const SizedBox(height: 12),
+                _editField('Truong dai hoc', uniCtrl, Icons.school_outlined),
+                const SizedBox(height: 12),
                 _editField(
-                  'Truong dai hoc',
-                  uniCtrl,
-                  Icons.school_outlined,
+                  'Dia chi nhan hang',
+                  shippingAddressCtrl,
+                  Icons.location_on_outlined,
+                  maxLines: 3,
                 ),
                 const SizedBox(height: 18),
                 const Text(
-                  'Thong tin QR ngan hang',
+                  'Tai khoan nhan rut tien',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
@@ -972,7 +1079,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 6),
                 const Text(
-                  'Nhap day du ten ngan hang, ma BIN, so tai khoan va ten chu tai khoan de nguoi mua co the quet QR chuyen tien.',
+                  'Nhap day du ten ngan hang, ma BIN, so tai khoan va ten chu tai khoan de admin co the chuyen tien cho ban khi xu ly yeu cau rut tu vi EduShare.',
                   style: TextStyle(
                     fontSize: 12.5,
                     color: AppColors.textGray,
@@ -1015,6 +1122,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ..name = nameCtrl.text.trim()
                         ..phone = phoneCtrl.text.trim()
                         ..university = uniCtrl.text.trim()
+                        ..shippingAddress = shippingAddressCtrl.text.trim()
                         ..bankName = bankNameCtrl.text.trim()
                         ..bankBin = bankBinCtrl.text.trim()
                         ..bankAccountNumber = bankNumberCtrl.text.trim()
@@ -1125,9 +1233,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         label: 'Mat khau moi',
                         controller: newPasswordCtrl,
                         obscureText: obscureNew,
-                        onToggleVisibility: () => setSheetState(
-                          () => obscureNew = !obscureNew,
-                        ),
+                        onToggleVisibility: () =>
+                            setSheetState(() => obscureNew = !obscureNew),
                         validator: (value) {
                           final password = value ?? '';
                           if (password.trim().isEmpty) {
@@ -1194,8 +1301,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   if (!mounted) return;
                                   if (success) {
                                     Navigator.pop(sheetContext);
-                                    ScaffoldMessenger.of(this.context)
-                                        .showSnackBar(
+                                    ScaffoldMessenger.of(
+                                      this.context,
+                                    ).showSnackBar(
                                       const SnackBar(
                                         content: Text(
                                           'Doi mat khau thanh cong.',
@@ -1242,10 +1350,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     TextEditingController controller,
     IconData icon, {
     TextInputType? type,
+    ValueChanged<String>? onChanged,
+    int maxLines = 1,
   }) {
     return TextField(
       controller: controller,
       keyboardType: type,
+      onChanged: onChanged,
+      minLines: maxLines > 1 ? 3 : 1,
+      maxLines: maxLines,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: AppColors.primary, size: 20),
@@ -1406,6 +1519,341 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _loadProfile();
   }
 
+  Future<void> _openAdminDashboard() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+    );
+    _loadProfile();
+  }
+
+  Future<void> _openAdminSupportChat() async {
+    final admin = await _dataService.getPrimaryAdminProfile();
+    if (!mounted) return;
+    if (admin == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Chua tim thay admin de ho tro luc nay.'),
+          backgroundColor: AppColors.red,
+        ),
+      );
+      return;
+    }
+    if (_dataService.currentUserId == admin.id) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ban dang su dung tai khoan admin.'),
+          backgroundColor: AppColors.amber,
+        ),
+      );
+      return;
+    }
+
+    final conversationId = await _dataService.ensureAdminConversation();
+    if (!mounted) return;
+    if (conversationId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Khong the khoi tao doan chat voi admin luc nay.'),
+          backgroundColor: AppColors.red,
+        ),
+      );
+      return;
+    }
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          sellerUid: admin.id,
+          sellerName: admin.name,
+          productId: 'support_admin',
+          productTitle: 'Ho tro EduShare',
+          productType: 'dung_cu',
+          conversationId: conversationId,
+        ),
+      ),
+    );
+  }
+
+  void _showWalletDepositSheet() {
+    final amountCtrl = TextEditingController();
+    const quickAmounts = <double>[50000, 100000, 200000, 500000, 1000000];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        double? selectedAmount;
+
+        return StatefulBuilder(
+          builder: (context, setSheetState) => Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Nap tien vao vi',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Chon nhanh so tien ban muon nap hoac nhap so khac. He thong se cong 90% vao vi EduShare sau khi admin xac nhan da nhan tien.',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: AppColors.textGray,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: quickAmounts.map((amount) {
+                      final isSelected = selectedAmount == amount;
+                      return ChoiceChip(
+                        label: Text(Formatter.price(amount)),
+                        selected: isSelected,
+                        onSelected: (_) {
+                          setSheetState(() {
+                            selectedAmount = amount;
+                            amountCtrl.text = amount.toStringAsFixed(0);
+                          });
+                        },
+                        selectedColor: AppColors.primaryLight,
+                        labelStyle: TextStyle(
+                          color: isSelected
+                              ? AppColors.primary
+                              : AppColors.textDark,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        side: BorderSide(
+                          color: isSelected
+                              ? AppColors.primary
+                              : const Color(0xFFE2E8F0),
+                        ),
+                        backgroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  _editField(
+                    'So tien muon nap',
+                    amountCtrl,
+                    Icons.payments_outlined,
+                    type: TextInputType.number,
+                    onChanged: (_) => setSheetState(() {}),
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      'Ban nap ${Formatter.price(_parseCurrencyInput(amountCtrl.text))} -> vi nhan ${Formatter.price(_parseCurrencyInput(amountCtrl.text) * AdminConfig.walletTopupCreditRate)}',
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: AppColors.textDark,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        final amount = _parseCurrencyInput(amountCtrl.text);
+                        if (amount <= 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Vui long nhap so tien hop le.'),
+                              backgroundColor: AppColors.red,
+                            ),
+                          );
+                          return;
+                        }
+
+                        final request = await _dataService.requestWalletDeposit(
+                          amount,
+                        );
+                        if (!mounted) return;
+                        Navigator.pop(sheetContext);
+                        if (request == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Khong the tao yeu cau nap tien luc nay.',
+                              ),
+                              backgroundColor: AppColors.red,
+                            ),
+                          );
+                          return;
+                        }
+
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                _WalletTopupScreen(request: request),
+                          ),
+                        );
+                        _loadProfile();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                      ),
+                      child: const Text('Tao QR nap tien'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    ).whenComplete(amountCtrl.dispose);
+  }
+
+  void _showWalletWithdrawSheet() {
+    final profile = _profile;
+    if (profile == null) return;
+
+    if (!profile.hasBankAccount) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Can cap nhat tai khoan ngan hang truoc khi rut tien.'),
+          backgroundColor: AppColors.red,
+        ),
+      );
+      return;
+    }
+
+    final amountCtrl = TextEditingController(
+      text: profile.walletBalance > 0
+          ? profile.walletBalance.toStringAsFixed(0)
+          : '',
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Rut tien tu vi',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'So du kha dung: ${Formatter.price(profile.walletBalance)}. Sau khi gui yeu cau, so tien nay se duoc tru khoi vi de cho admin xu ly.',
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  color: AppColors.textGray,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 16),
+              _editField(
+                'So tien muon rut',
+                amountCtrl,
+                Icons.account_balance_wallet_outlined,
+                type: TextInputType.number,
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    final amount = _parseCurrencyInput(amountCtrl.text);
+                    if (amount <= 0 || amount > profile.walletBalance) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('So tien rut khong hop le.'),
+                          backgroundColor: AppColors.red,
+                        ),
+                      );
+                      return;
+                    }
+
+                    final request = await _dataService.requestWalletWithdrawal(
+                      amount,
+                    );
+                    if (!mounted) return;
+                    Navigator.pop(sheetContext);
+                    if (request == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Khong the tao yeu cau rut tien luc nay.',
+                          ),
+                          backgroundColor: AppColors.red,
+                        ),
+                      );
+                      return;
+                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Da tao yeu cau rut ${Formatter.price(amount)}. Admin se xu ly som.',
+                        ),
+                      ),
+                    );
+                    _loadProfile();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                  ),
+                  child: const Text('Gui yeu cau rut tien'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ).whenComplete(amountCtrl.dispose);
+  }
+
+  double _parseCurrencyInput(String raw) {
+    final normalized = raw.replaceAll(RegExp(r'[^0-9.]'), '');
+    return double.tryParse(normalized) ?? 0;
+  }
+
   void _confirmLogout() {
     showDialog(
       context: context,
@@ -1429,6 +1877,312 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: TextStyle(color: AppColors.red),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WalletTopupScreen extends StatelessWidget {
+  final WalletRequest request;
+  static final FirebaseDataService _dataService = FirebaseDataService.instance;
+
+  const _WalletTopupScreen({required this.request});
+
+  @override
+  Widget build(BuildContext context) {
+    final qrUrl =
+        'https://img.vietqr.io/image/'
+        '${AdminConfig.bankBin}-${AdminConfig.bankAccountNumber}-compact2.png'
+        '?amount=${request.requestedAmount.round()}'
+        '&addInfo=${Uri.encodeComponent(request.transferNote)}'
+        '&accountName=${Uri.encodeComponent(AdminConfig.bankAccountHolder)}';
+
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        title: const Text('QR nap tien vao vi'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+            ),
+            child: Column(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: Image.network(
+                    qrUrl,
+                    width: 220,
+                    height: 220,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      width: 220,
+                      height: 220,
+                      color: const Color(0xFFF8FAFC),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.qr_code_2_rounded,
+                        size: 88,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'Quet QR de nap tien vao vi EduShare',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textDark,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Sau khi admin xac nhan da nhan ${Formatter.price(request.requestedAmount)}, vi cua ban se duoc cong ${Formatter.price(request.creditedAmount)}.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: AppColors.textGray,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _walletInfoRow(context, 'Ngan hang', AdminConfig.bankName),
+                _walletInfoRow(context, 'Ma BIN', AdminConfig.bankBin),
+                _walletInfoRow(
+                  context,
+                  'So tai khoan',
+                  AdminConfig.bankAccountNumber,
+                  copyValue: AdminConfig.bankAccountNumber,
+                ),
+                _walletInfoRow(
+                  context,
+                  'Chu tai khoan',
+                  AdminConfig.bankAccountHolder,
+                ),
+                _walletInfoRow(
+                  context,
+                  'Noi dung GD',
+                  request.transferNote,
+                  copyValue: request.transferNote,
+                ),
+                _walletInfoRow(
+                  context,
+                  'So tien chuyen',
+                  Formatter.price(request.requestedAmount),
+                ),
+                _walletInfoRow(
+                  context,
+                  'Tien vao vi',
+                  Formatter.price(request.creditedAmount),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+                onPressed: () async {
+                  final admin = await _dataService.getPrimaryAdminProfile();
+                  if (!context.mounted) return;
+                  if (admin == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Chua tim thay admin de ho tro luc nay.'),
+                      backgroundColor: AppColors.red,
+                    ),
+                    );
+                    return;
+                  }
+                  if (_dataService.currentUserId == admin.id) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Ban dang su dung tai khoan admin.'),
+                        backgroundColor: AppColors.amber,
+                      ),
+                    );
+                    return;
+                  }
+
+                  final conversationId = await _dataService.ensureAdminConversation(
+                    topic: 'Ho tro nap tien vi EduShare',
+                  );
+                  if (!context.mounted) return;
+                  if (conversationId == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Khong the khoi tao doan chat voi admin luc nay.',
+                        ),
+                        backgroundColor: AppColors.red,
+                      ),
+                    );
+                    return;
+                  }
+
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ChatScreen(
+                      sellerUid: admin.id,
+                      sellerName: admin.name,
+                      productId: 'support_admin',
+                      productTitle: 'Ho tro nap tien vi EduShare',
+                      productType: 'dung_cu',
+                      conversationId: conversationId,
+                    ),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.support_agent_rounded),
+              label: const Text('Can ho tro? Chat voi admin'),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () async {
+                    final shouldCancel = await showDialog<bool>(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        title: const Text('Huy yeu cau nap tien?'),
+                        content: const Text(
+                          'Yeu cau nap tien nay se bi huy va admin se khong xu ly nua.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Khong'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text(
+                              'Huy yeu cau',
+                              style: TextStyle(color: AppColors.red),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (shouldCancel != true) return;
+                    await _dataService.cancelWalletRequest(request.id);
+                    if (!context.mounted) return;
+                    final messenger = ScaffoldMessenger.of(context);
+                    Navigator.pop(context);
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Da huy yeu cau nap tien.'),
+                      ),
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.red,
+                    side: const BorderSide(color: AppColors.red),
+                    minimumSize: const Size.fromHeight(52),
+                  ),
+                  child: const Text('Huy'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    final messenger = ScaffoldMessenger.of(context);
+                    Navigator.pop(context);
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Yeu cau nap tien da duoc ghi nhan. Cho admin xac nhan giao dich.',
+                        ),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    minimumSize: const Size.fromHeight(52),
+                  ),
+                  child: const Text('Hoan tat'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _walletInfoRow(
+    BuildContext context,
+    String label,
+    String value, {
+    String? copyValue,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 92,
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 12.5, color: AppColors.textGray),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 12.8,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textDark,
+              ),
+            ),
+          ),
+          if (copyValue != null)
+            IconButton(
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: copyValue));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Da sao chep thong tin.'),
+                    duration: Duration(milliseconds: 900),
+                  ),
+                );
+              },
+              icon: const Icon(
+                Icons.copy_rounded,
+                size: 18,
+                color: AppColors.primary,
+              ),
+            ),
         ],
       ),
     );

@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/product.dart';
 import '../services/firebase_data_service.dart';
 import '../utils/constants.dart';
@@ -22,10 +25,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   final _dataService = FirebaseDataService.instance;
   final _auth = FirebaseAuth.instance;
+  final _imagePicker = ImagePicker();
 
   String _selectedType = 'sach';
   String _selectedCategory = 'Toan - Tin';
   String _selectedCondition = 'Nhu moi';
+  String? _selectedImageDataUrl;
+  bool _imageValidationError = false;
+  bool _imagePicking = false;
   bool _isFree = false;
   bool _isFeatured = false;
   bool _saving = false;
@@ -77,7 +84,30 @@ class _AddProductScreenState extends State<AddProductScreen> {
             children: [
               _buildPreviewCard(),
               const SizedBox(height: 20),
-              _sectionTitle('Anh minh hoa'),
+              Row(
+                children: [
+                  _sectionTitle('Anh minh hoa'),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF1F2),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const Text(
+                      'Bat buoc',
+                      style: TextStyle(
+                        color: AppColors.red,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               _buildImagePreviewCard(),
               const SizedBox(height: 20),
               _sectionTitle('Loai san pham *'),
@@ -247,25 +277,40 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _saving ? null : _submit,
+                  onPressed: (_saving || _imagePicking) ? null : _submit,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
+                    backgroundColor: _selectedImageDataUrl == null
+                        ? const Color(0xFF7FC9C2)
+                        : AppColors.primary,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     elevation: 0,
                   ),
-                  child: _saving
+                  child: _saving || _imagePicking
                       ? const SizedBox(
                           width: 22,
                           height: 22,
                           child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
                         )
-                      : const Row(
+                      : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.cloud_upload_outlined, size: 20),
-                            SizedBox(width: 8),
-                            Text('Dang san pham', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            Icon(
+                              _selectedImageDataUrl == null
+                                  ? Icons.image_not_supported_outlined
+                                  : Icons.cloud_upload_outlined,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _selectedImageDataUrl == null
+                                  ? 'Can chon anh minh hoa'
+                                  : 'Dang san pham',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ],
                         ),
                 ),
@@ -279,42 +324,187 @@ class _AddProductScreenState extends State<AddProductScreen> {
   }
 
   Widget _buildImagePreviewCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.18)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: SizedBox(
-              width: double.infinity,
-              height: 180,
-              child: Image.asset(
-                imageForProductType(_selectedType),
-                fit: BoxFit.cover,
+    final hasSelectedImage =
+        _selectedImageDataUrl != null && _selectedImageDataUrl!.trim().isNotEmpty;
+    return InkWell(
+      onTap: _imagePicking ? null : _showImageSourceSheet,
+      borderRadius: BorderRadius.circular(18),
+      child: Ink(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: _imageValidationError
+                ? AppColors.red
+                : hasSelectedImage
+                    ? AppColors.primary.withValues(alpha: 0.24)
+                    : const Color(0xFFD8E6E8),
+            width: _imageValidationError ? 1.5 : 1.1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.035),
+              blurRadius: 10,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 188,
+                    child: hasSelectedImage
+                        ? buildProductImage(
+                            type: _selectedType,
+                            imageUrl: _selectedImageDataUrl,
+                          )
+                        : _buildEmptyImagePlaceholder(
+                            large: true,
+                            showHint: false,
+                          ),
+                  ),
+                ),
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.58),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.photo_camera_back_outlined,
+                          size: 15,
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          hasSelectedImage ? 'Doi anh' : 'Them anh',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              hasSelectedImage
+                  ? 'Anh san pham da san sang'
+                  : 'Them anh minh hoa cho san pham',
+              style: const TextStyle(
+                color: AppColors.textDark,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
               ),
             ),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Anh minh hoa duoc gan tu dong theo loai san pham.',
-            style: TextStyle(
-              color: AppColors.textDark,
-              fontWeight: FontWeight.w600,
+            const SizedBox(height: 4),
+            Text(
+              hasSelectedImage
+                  ? 'Ban co the cham vao day de doi anh, chup anh moi hoac xoa anh da chon.'
+                  : 'Chua co anh mac dinh. Ban can tu them anh tu thu vien hoac chup bang camera.',
+              style: const TextStyle(
+                color: AppColors.textGray,
+                fontSize: 12.5,
+                height: 1.4,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'Ban khong can bat Firebase Storage hoac nang cap goi tra phi.',
-            style: TextStyle(color: AppColors.textGray, fontSize: 12),
-          ),
-        ],
+            if (_imageValidationError) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Vui long chon anh minh hoa cho san pham.',
+                style: TextStyle(
+                  color: AppColors.red,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _imageActionChip(
+                  icon: Icons.photo_library_outlined,
+                  label: hasSelectedImage ? 'Doi tu thu vien' : 'Chon tu thu vien',
+                  onTap: () => _pickProductImage(ImageSource.gallery),
+                ),
+                _imageActionChip(
+                  icon: Icons.photo_camera_outlined,
+                  label: 'Chup bang camera',
+                  onTap: () => _pickProductImage(ImageSource.camera),
+                ),
+                if (hasSelectedImage)
+                  _imageActionChip(
+                    icon: Icons.delete_outline_rounded,
+                    label: 'Bo anh',
+                    isDanger: true,
+                    onTap: () => setState(() {
+                      _selectedImageDataUrl = null;
+                      _imageValidationError = true;
+                    }),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _imageActionChip({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool isDanger = false,
+  }) {
+    final color = isDanger ? AppColors.red : AppColors.primary;
+    return InkWell(
+      onTap: _imagePicking ? null : onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Ink(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: 0.14)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -324,6 +514,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
     final originalPrice = double.tryParse(_originalPriceCtrl.text);
     final hasDiscount = originalPrice != null && originalPrice > price && !_isFree;
     final discountPct = hasDiscount ? (((originalPrice - price) / originalPrice) * 100).round() : 0;
+    final hasSelectedImage =
+        _selectedImageDataUrl != null && _selectedImageDataUrl!.trim().isNotEmpty;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -342,7 +534,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
             child: SizedBox(
               width: 72,
               height: 72,
-              child: Image.asset(imageForProductType(_selectedType), fit: BoxFit.cover),
+              child: hasSelectedImage
+                  ? buildProductImage(
+                      type: _selectedType,
+                      imageUrl: _selectedImageDataUrl,
+                    )
+                  : _buildEmptyImagePlaceholder(),
             ),
           ),
           const SizedBox(width: 14),
@@ -558,6 +755,16 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_selectedImageDataUrl == null || _selectedImageDataUrl!.trim().isEmpty) {
+      setState(() => _imageValidationError = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Can chon anh minh hoa truoc khi dang san pham.'),
+          backgroundColor: AppColors.red,
+        ),
+      );
+      return;
+    }
 
     setState(() => _saving = true);
 
@@ -589,7 +796,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         isFree: _isFree,
         discount: discount,
         imageEmoji: '',
-        imageUrl: null,
+        imageUrl: _selectedImageDataUrl,
         description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
         condition: _selectedCondition,
         isFeatured: _isFeatured,
@@ -681,9 +888,292 @@ class _AddProductScreenState extends State<AddProductScreen> {
       _selectedType = 'sach';
       _selectedCategory = 'Toan - Tin';
       _selectedCondition = 'Nhu moi';
+      _selectedImageDataUrl = null;
+      _imageValidationError = false;
       _isFree = false;
       _isFeatured = false;
     });
+  }
+
+  Future<void> _showImageSourceSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Container(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const Text(
+                'Chon anh minh hoa',
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textDark,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Ban co the tai anh san pham tu thu vien hoac chup nhanh bang camera.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textGray,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 18),
+              _pickerOption(
+                icon: Icons.photo_library_outlined,
+                title: 'Chon tu thu vien',
+                subtitle: 'Lay anh co san trong may',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _pickProductImage(ImageSource.gallery);
+                },
+              ),
+              const SizedBox(height: 12),
+              _pickerOption(
+                icon: Icons.photo_camera_outlined,
+                title: 'Chup bang camera',
+                subtitle: 'Tao anh moi ngay luc nay',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _pickProductImage(ImageSource.camera);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _pickerOption({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Ink(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FBFC),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.08)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: AppColors.primary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: AppColors.textGray,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios_rounded,
+              size: 14,
+              color: AppColors.textGray,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyImagePlaceholder({
+    bool large = false,
+    bool showHint = true,
+  }) {
+    final borderRadius = BorderRadius.circular(large ? 14 : 12);
+    final iconSize = large ? 38.0 : 22.0;
+    final titleStyle = TextStyle(
+      color: large ? AppColors.textDark : Colors.white,
+      fontWeight: FontWeight.w700,
+      fontSize: large ? 14 : 10.5,
+    );
+    final subtitleStyle = TextStyle(
+      color: large
+          ? AppColors.textGray
+          : Colors.white.withValues(alpha: 0.72),
+      fontSize: large ? 12 : 9.5,
+      height: 1.35,
+    );
+
+    return Container(
+      decoration: BoxDecoration(
+        color: large ? const Color(0xFFF5FAFA) : Colors.white.withValues(alpha: 0.16),
+        borderRadius: borderRadius,
+        border: Border.all(
+          color: large
+              ? const Color(0xFFD8E6E8)
+              : Colors.white.withValues(alpha: 0.22),
+        ),
+      ),
+      child: Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: large ? 18 : 8,
+            vertical: large ? 18 : 6,
+          ),
+          child: large
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.add_photo_alternate_outlined,
+                        color: AppColors.primary,
+                        size: iconSize,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Chua co anh',
+                      style: titleStyle,
+                      textAlign: TextAlign.center,
+                    ),
+                    if (showHint) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Them anh de dang san pham',
+                        style: subtitleStyle,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ],
+                )
+              : Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.14),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.add_photo_alternate_outlined,
+                    color: Colors.white,
+                    size: iconSize,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickProductImage(ImageSource source) async {
+    try {
+      setState(() => _imagePicking = true);
+      final picked = await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 55,
+        maxWidth: 1400,
+      );
+      if (picked == null) {
+        if (!mounted) return;
+        setState(() => _imagePicking = false);
+        return;
+      }
+
+      final bytes = await picked.readAsBytes();
+      final encoded = base64Encode(bytes);
+      final mimeType = _mimeTypeForPath(picked.path);
+      final dataUrl = 'data:$mimeType;base64,$encoded';
+
+      if (dataUrl.length > 900000) {
+        if (!mounted) return;
+        setState(() => _imagePicking = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Anh qua lon. Vui long chon anh nho hon.'),
+            backgroundColor: AppColors.red,
+          ),
+        );
+        return;
+      }
+
+      setState(() {
+        _selectedImageDataUrl = dataUrl;
+        _imageValidationError = false;
+        _imagePicking = false;
+      });
+    } on PlatformException {
+      if (!mounted) return;
+      setState(() => _imagePicking = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Khong the mo bo chon anh. Thu lai sau.'),
+          backgroundColor: AppColors.red,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _imagePicking = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Khong the tai anh len. Thu lai sau.'),
+          backgroundColor: AppColors.red,
+        ),
+      );
+    }
+  }
+
+  String _mimeTypeForPath(String path) {
+    final lower = path.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.gif')) return 'image/gif';
+    return 'image/jpeg';
   }
 }
 

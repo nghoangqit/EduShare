@@ -15,7 +15,7 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _ctrl = TextEditingController();
   final FirebaseDataService _dataService = FirebaseDataService.instance;
-  final List<String> _suggestions = [
+  final List<String> _fallbackSuggestions = [
     'Giai tich',
     'May tinh Casio',
     'Tu dien',
@@ -25,8 +25,17 @@ class _SearchScreenState extends State<SearchScreen> {
   ];
 
   List<Product> _results = [];
+  List<Product> _recommendedProducts = [];
+  List<String> _dynamicSuggestions = [];
   bool _searched = false;
   bool _loading = false;
+  bool _loadingSuggestions = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecommendations();
+  }
 
   Future<void> _search(String query) async {
     final keyword = query.trim();
@@ -50,6 +59,17 @@ class _SearchScreenState extends State<SearchScreen> {
       _searched = false;
       _results = [];
       _loading = false;
+    });
+  }
+
+  Future<void> _loadRecommendations() async {
+    final keywords = await _dataService.getRecommendedSearchKeywords(limit: 8);
+    final products = await _dataService.getRecommendedProducts(limit: 6);
+    if (!mounted) return;
+    setState(() {
+      _dynamicSuggestions = keywords;
+      _recommendedProducts = products;
+      _loadingSuggestions = false;
     });
   }
 
@@ -197,6 +217,10 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildSuggestions() {
+    final suggestions = _dynamicSuggestions.isEmpty
+        ? _fallbackSuggestions
+        : _dynamicSuggestions;
+
     return ListView(
       key: const ValueKey('suggestions'),
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
@@ -258,44 +282,54 @@ class _SearchScreenState extends State<SearchScreen> {
                 ],
               ),
               const SizedBox(height: 16),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: _suggestions.map((suggestion) {
-                  return InkWell(
-                    borderRadius: BorderRadius.circular(999),
-                    onTap: () {
-                      _ctrl.text = suggestion;
-                      _search(suggestion);
-                    },
-                    child: Ink(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 11,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryLight,
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(
-                          color: AppColors.primary.withValues(alpha: 0.12),
+              if (_loadingSuggestions)
+                const LinearProgressIndicator(
+                  color: AppColors.primary,
+                  minHeight: 3,
+                )
+              else
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: suggestions.map((suggestion) {
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(999),
+                      onTap: () {
+                        _ctrl.text = suggestion;
+                        _search(suggestion);
+                      },
+                      child: Ink(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 11,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryLight,
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: AppColors.primary.withValues(alpha: 0.12),
+                          ),
+                        ),
+                        child: Text(
+                          suggestion,
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
-                      child: Text(
-                        suggestion,
-                        style: const TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
+                    );
+                  }).toList(),
+                ),
             ],
           ),
         ),
         const SizedBox(height: 18),
+        if (_recommendedProducts.isNotEmpty) ...[
+          _buildRecommendationRail(),
+          const SizedBox(height: 18),
+        ],
         _buildIdeaTile(
           icon: Icons.menu_book_rounded,
           iconColor: AppColors.primary,
@@ -312,6 +346,60 @@ class _SearchScreenState extends State<SearchScreen> {
           badge: 'Moi',
         ),
       ],
+    );
+  }
+
+  Widget _buildRecommendationRail() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Danh cho ban',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textDark,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Nhung san pham he thong de xuat dua tren xu huong va so thich.',
+            style: TextStyle(
+              fontSize: 12.5,
+              color: AppColors.textGray,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 286,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _recommendedProducts.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (_, index) {
+                return SizedBox(
+                  width: 180,
+                  child: ProductCard(product: _recommendedProducts[index]),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 

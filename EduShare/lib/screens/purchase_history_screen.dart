@@ -44,7 +44,13 @@ class PurchaseHistoryScreen extends StatelessWidget {
           }
 
           final pendingOrders = orders
-              .where((order) => order.status == 'pending_payment')
+              .where(
+                (order) =>
+                    order.status == 'awaiting_shipment' ||
+                    order.status == 'delivered_pending_release' ||
+                    order.status == 'pending_admin_confirmation' ||
+                    order.status == 'pending_cod',
+              )
               .length;
 
           return ListView(
@@ -97,7 +103,7 @@ class PurchaseHistoryScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '$pendingOrders don dang cho xac nhan chuyen khoan',
+                  '$pendingOrders don dang trong quy trinh trung gian',
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
@@ -106,7 +112,7 @@ class PurchaseHistoryScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'Khi backend doi soat giao dich hop le, trang thai don se tu dong cap nhat.',
+                  'Don dang duoc xu ly boi admin. Sau khi giao xong, 95% gia tri don se duoc cong vao vi EduShare cua nguoi ban.',
                   style: TextStyle(
                     fontSize: 12.5,
                     color: AppColors.textGray,
@@ -278,15 +284,21 @@ class PurchaseHistoryScreen extends StatelessWidget {
   Widget _statusChip(PurchaseRecord order) {
     final color = switch (order.status) {
       'paid' => Colors.green,
+      'completed' => Colors.green,
       'pending_cod' => AppColors.blue,
-      'pending_payment' => AppColors.amber,
+      'pending_admin_confirmation' => AppColors.amber,
+      'awaiting_shipment' => AppColors.blue,
+      'delivered_pending_release' => AppColors.purple,
       _ => AppColors.textGray,
     };
 
     final label = switch (order.status) {
       'paid' => 'Da thanh toan',
+      'completed' => 'Hoan tat',
       'pending_cod' => 'COD',
-      'pending_payment' => 'Cho xac nhan',
+      'pending_admin_confirmation' => 'Cho admin xac nhan',
+      'awaiting_shipment' => 'Cho giao hang',
+      'delivered_pending_release' => 'Cho cong vi',
       _ => order.status,
     };
 
@@ -311,6 +323,8 @@ class PurchaseHistoryScreen extends StatelessWidget {
     return switch (paymentMethod) {
       'cod' => 'Thanh toan COD',
       'free' => 'Don mien phi',
+      'admin_escrow' => 'Ky quy qua admin',
+      'wallet' => 'Vi EduShare',
       'online' => 'Thanh toan QR ngan hang',
       _ => 'Thanh toan',
     };

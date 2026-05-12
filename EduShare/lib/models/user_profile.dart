@@ -1,9 +1,14 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../utils/constants.dart';
+
 class UserProfile {
   final String id;
   String name;
   String email;
   String phone;
   String university;
+  String shippingAddress;
   String avatarEmoji;
   String? avatarBase64;
   String bankName;
@@ -13,6 +18,9 @@ class UserProfile {
   int totalPurchases;
   int totalSales;
   double rating;
+  double walletBalance;
+  bool isAdmin;
+  bool isBanned;
   DateTime joinDate;
 
   UserProfile({
@@ -21,6 +29,7 @@ class UserProfile {
     required this.email,
     required this.phone,
     required this.university,
+    this.shippingAddress = '',
     this.avatarEmoji = 'avatar',
     this.avatarBase64,
     this.bankName = '',
@@ -30,6 +39,9 @@ class UserProfile {
     this.totalPurchases = 0,
     this.totalSales = 0,
     this.rating = 0.0,
+    this.walletBalance = 0.0,
+    this.isAdmin = false,
+    this.isBanned = false,
     required this.joinDate,
   });
 
@@ -40,6 +52,10 @@ class UserProfile {
       email: map['email'] as String,
       phone: map['phone'] as String? ?? '',
       university: map['university'] as String? ?? '',
+      shippingAddress:
+          map['shipping_address'] as String? ??
+          map['shippingAddress'] as String? ??
+          '',
       avatarEmoji:
           map['avatar_emoji'] as String? ??
           map['avatarEmoji'] as String? ??
@@ -75,12 +91,21 @@ class UserProfile {
           (map['totalSales'] as num?)?.toInt() ??
           0,
       rating: (map['rating'] as num?)?.toDouble() ?? 0.0,
+      walletBalance:
+          (map['wallet_balance'] as num?)?.toDouble() ??
+          (map['walletBalance'] as num?)?.toDouble() ??
+          0.0,
+      isAdmin:
+          map['is_admin'] as bool? ??
+          map['isAdmin'] as bool? ??
+          AdminConfig.isAdminEmail(map['email'] as String?),
+      isBanned:
+          map['is_banned'] as bool? ??
+          map['isBanned'] as bool? ??
+          false,
       joinDate:
-          DateTime.tryParse(
-            (map['join_date'] ??
-                    map['joinDate'] ??
-                    DateTime.now().toIso8601String())
-                .toString(),
+          _parseDate(
+            map['join_date'] ?? map['joinDate'] ?? DateTime.now(),
           ) ??
           DateTime.now(),
     );
@@ -93,6 +118,7 @@ class UserProfile {
       'email': email,
       'phone': phone,
       'university': university,
+      'shipping_address': shippingAddress,
       'avatar_emoji': avatarEmoji,
       'avatar_base64': avatarBase64,
       'bank_name': bankName,
@@ -105,6 +131,9 @@ class UserProfile {
       'total_purchases': totalPurchases,
       'total_sales': totalSales,
       'rating': rating,
+      'wallet_balance': walletBalance,
+      'is_admin': isAdmin,
+      'is_banned': isBanned,
       'join_date': joinDate.toIso8601String(),
     };
   }
@@ -115,6 +144,7 @@ class UserProfile {
       'email': email,
       'phone': phone,
       'university': university,
+      'shippingAddress': shippingAddress,
       'avatarEmoji': avatarEmoji,
       'avatarBase64': avatarBase64,
       'bankName': bankName,
@@ -127,6 +157,9 @@ class UserProfile {
       'totalPurchases': totalPurchases,
       'totalSales': totalSales,
       'rating': rating,
+      'walletBalance': walletBalance,
+      'isAdmin': isAdmin,
+      'isBanned': isBanned,
       'joinDate': joinDate.toIso8601String(),
     };
   }
@@ -136,7 +169,8 @@ class UserProfile {
     return normalizedName.isEmpty ||
         normalizedName == 'nguoi dung edushare' ||
         phone.trim().isEmpty ||
-        university.trim().isEmpty;
+        university.trim().isEmpty ||
+        shippingAddress.trim().isEmpty;
   }
 
   bool get hasCustomAvatar =>
@@ -158,4 +192,14 @@ class UserProfile {
 
   String get momoName => bankAccountHolder;
   set momoName(String value) => bankAccountHolder = value;
+
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
+    final normalized = value.toString().trim();
+    if (normalized.isEmpty) return null;
+    return DateTime.tryParse(normalized);
+  }
 }

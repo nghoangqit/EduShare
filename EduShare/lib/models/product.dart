@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Product {
   final String id;
   final String title;
@@ -69,9 +71,7 @@ class Product {
       description: map['description'] as String?,
       condition: map['condition'] as String? ?? 'Như mới',
       isFeatured: normalizeBool(isFeaturedValue),
-      createdAt: map['created_at'] is String
-          ? DateTime.tryParse(map['created_at'] as String)
-          : (map['createdAt'] is String ? DateTime.tryParse(map['createdAt'] as String) : null),
+      createdAt: _parseDate(map['created_at'] ?? map['createdAt']),
       sellerUid: map['seller_uid'] as String? ?? map['sellerUid'] as String?,
     );
   }
@@ -119,5 +119,15 @@ class Product {
       'createdAt': createdAt?.toIso8601String(),
       'sellerUid': sellerUid,
     };
+  }
+
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
+    final normalized = value.toString().trim();
+    if (normalized.isEmpty) return null;
+    return DateTime.tryParse(normalized);
   }
 }

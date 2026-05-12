@@ -1,9 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
+import '../models/app_notification.dart';
 import '../models/cart_item.dart';
+import '../models/chat_conversation.dart';
+import '../models/chat_message.dart';
 import '../models/product.dart';
 import '../models/purchase_record.dart';
 import '../models/user_profile.dart';
+import '../models/wallet_request.dart';
+import '../utils/constants.dart';
 
 class FirebaseDataService {
   FirebaseDataService._();
@@ -21,6 +27,14 @@ class FirebaseDataService {
       _firestore.collection('favorites');
   CollectionReference<Map<String, dynamic>> get _orders =>
       _firestore.collection('orders');
+  CollectionReference<Map<String, dynamic>> get _conversations =>
+      _firestore.collection('conversations');
+  CollectionReference<Map<String, dynamic>> get _notifications =>
+      _firestore.collection('notifications');
+  CollectionReference<Map<String, dynamic>> get _walletRequests =>
+      _firestore.collection('walletRequests');
+
+  String? get currentUserId => _auth.currentUser?.uid;
 
   Future<UserProfile> ensureUserProfile(User firebaseUser) async {
     final fallbackProfile = UserProfile(
@@ -31,6 +45,7 @@ class FirebaseDataService {
       email: firebaseUser.email ?? '',
       phone: '',
       university: '',
+      isAdmin: AdminConfig.isAdminEmail(firebaseUser.email),
       joinDate: DateTime.now(),
     );
 
@@ -75,6 +90,32 @@ class FirebaseDataService {
     }
   }
 
+  Future<UserProfile?> getPrimaryAdminProfile() async {
+    final users = await getAllUsers();
+    for (final user in users) {
+      if (user.isAdmin || AdminConfig.isAdminEmail(user.email)) {
+        return user;
+      }
+    }
+    return null;
+  }
+
+  Future<List<UserProfile>> getAllUsers() async {
+    try {
+      final snapshot = await _users.get();
+      final users = snapshot.docs
+          .map((doc) => UserProfile.fromMap({'id': doc.id, ...doc.data()}))
+          .toList();
+      users.sort(
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
+      return users;
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') return [];
+      rethrow;
+    }
+  }
+
   Future<void> updateUserProfile(UserProfile profile) async {
     try {
       await _users
@@ -85,11 +126,162 @@ class FirebaseDataService {
     }
   }
 
+  Future<List<WalletRequest>> getAllWalletRequests() async {
+    try {
+      final snapshot = await _walletRequests.get();
+      final requests = snapshot.docs
+          .map((doc) => WalletRequest.fromMap({'id': doc.id, ...doc.data()}))
+          .toList();
+      requests.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return requests;
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') return [];
+      rethrow;
+    }
+  }
+
+  Future<List<WalletRequest>> getCurrentUserWalletRequests() async {
+    final user = _auth.currentUser;
+    if (user == null) return [];
+
+    try {
+      final snapshot = await _walletRequests.where('userUid', isEqualTo: user.uid).get();
+      final requests = snapshot.docs
+          .map((doc) => WalletRequest.fromMap({'id': doc.id, ...doc.data()}))
+          .toList();
+      requests.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return requests;
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') return [];
+      rethrow;
+    }
+  }
+
+  Future<WalletRequest?> requestWalletDeposit(double requestedAmount) async {
+    final user = _auth.currentUser;
+    if (user == null || requestedAmount <= 0) return null;
+
+    final profile = await ensureUserProfile(user);
+    final requestRef = _walletRequests.doc();
+    final note =
+        'NAP-${user.uid.substring(0, user.uid.length < 6 ? user.uid.length : 6).toUpperCase()}-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+    final creditedAmount = requestedAmount * AdminConfig.walletTopupCreditRate;
+
+    try {
+      await requestRef.set({
+        'userUid': user.uid,
+        'userName': profile.name,
+        'userEmail': profile.email,
+        'type': 'deposit',
+        'requestedAmount': requestedAmount,
+        'creditedAmount': creditedAmount,
+        'status': 'pending',
+        'transferNote': note,
+        'bankName': '',
+        'bankBin': '',
+        'bankAccountNumber': '',
+        'bankAccountHolder': '',
+        'note': 'Nap ${requestedAmount.toStringAsFixed(0)}d vao vi EduShare',
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+      await _notifyAdmins(
+        title: 'Co yeu cau nap tien moi',
+        body:
+            '${profile.name} vua tao yeu cau nap ${requestedAmount.toStringAsFixed(0)}d vao vi EduShare.',
+        type: 'wallet_deposit_requested',
+      );
+      return WalletRequest.fromMap({
+        'id': requestRef.id,
+        'userUid': user.uid,
+        'userName': profile.name,
+        'userEmail': profile.email,
+        'type': 'deposit',
+        'requestedAmount': requestedAmount,
+        'creditedAmount': creditedAmount,
+        'status': 'pending',
+        'transferNote': note,
+        'bankName': '',
+        'bankBin': '',
+        'bankAccountNumber': '',
+        'bankAccountHolder': '',
+        'note': 'Nap ${requestedAmount.toStringAsFixed(0)}d vao vi EduShare',
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') return null;
+      rethrow;
+    }
+  }
+
+  Future<WalletRequest?> requestWalletWithdrawal(double amount) async {
+    final user = _auth.currentUser;
+    if (user == null || amount <= 0) return null;
+
+    final profile = await ensureUserProfile(user);
+    if (!profile.hasBankAccount || profile.walletBalance < amount) {
+      return null;
+    }
+
+    final requestRef = _walletRequests.doc();
+    final note =
+        'RUT-${user.uid.substring(0, user.uid.length < 6 ? user.uid.length : 6).toUpperCase()}-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+
+    try {
+      final batch = _firestore.batch();
+      batch.set(requestRef, {
+        'userUid': user.uid,
+        'userName': profile.name,
+        'userEmail': profile.email,
+        'type': 'withdrawal',
+        'requestedAmount': amount,
+        'creditedAmount': amount,
+        'status': 'pending',
+        'transferNote': note,
+        'bankName': profile.bankName,
+        'bankBin': profile.bankBin,
+        'bankAccountNumber': profile.bankAccountNumber,
+        'bankAccountHolder': profile.bankAccountHolder,
+        'note': 'Rut ${amount.toStringAsFixed(0)}d tu vi EduShare',
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+      batch.set(_users.doc(user.uid), {
+        'walletBalance': profile.walletBalance - amount,
+      }, SetOptions(merge: true));
+      await batch.commit();
+
+      await _notifyAdmins(
+        title: 'Co yeu cau rut tien moi',
+        body:
+            '${profile.name} muon rut ${amount.toStringAsFixed(0)}d khoi vi EduShare.',
+        type: 'wallet_withdrawal_requested',
+      );
+
+      return WalletRequest.fromMap({
+        'id': requestRef.id,
+        'userUid': user.uid,
+        'userName': profile.name,
+        'userEmail': profile.email,
+        'type': 'withdrawal',
+        'requestedAmount': amount,
+        'creditedAmount': amount,
+        'status': 'pending',
+        'transferNote': note,
+        'bankName': profile.bankName,
+        'bankBin': profile.bankBin,
+        'bankAccountNumber': profile.bankAccountNumber,
+        'bankAccountHolder': profile.bankAccountHolder,
+        'note': 'Rut ${amount.toStringAsFixed(0)}d tu vi EduShare',
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') return null;
+      rethrow;
+    }
+  }
+
   Future<List<Product>> getAllProducts() async {
     try {
-      final snapshot = await _products
-          .orderBy('createdAt', descending: true)
-          .get();
+      final snapshot = await _products.orderBy('createdAt', descending: true).get();
       return snapshot.docs.map(_productFromDoc).toList();
     } on FirebaseException catch (error) {
       if (error.code == 'permission-denied') return [];
@@ -103,11 +295,16 @@ class FirebaseDataService {
   }
 
   Future<List<Product>> getRecentProducts() async {
-    final snapshot = await _products
-        .orderBy('createdAt', descending: true)
-        .limit(20)
-        .get();
-    return snapshot.docs.map(_productFromDoc).toList();
+    try {
+      final snapshot = await _products
+          .orderBy('createdAt', descending: true)
+          .limit(20)
+          .get();
+      return snapshot.docs.map(_productFromDoc).toList();
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') return [];
+      rethrow;
+    }
   }
 
   Future<List<Product>> searchProducts(String query) async {
@@ -120,11 +317,151 @@ class FirebaseDataService {
     }).toList();
   }
 
+  Future<List<String>> getRecommendedSearchKeywords({int limit = 10}) async {
+    final scores = <String, int>{};
+
+    void addKeyword(String? value, int weight) {
+      final normalized = _normalizeRecommendationText(value);
+      if (normalized == null) return;
+      scores.update(normalized, (current) => current + weight, ifAbsent: () => weight);
+    }
+
+    final profile = await getCurrentUserProfile();
+    final favoriteProducts = await getFavoriteProducts();
+    final purchaseHistory = await getPurchaseHistory();
+    final conversations = await _getCurrentUserConversationsForRecommendation();
+    final featuredProducts = await getFeaturedProducts();
+    final recentProducts = await getRecentProducts();
+
+    addKeyword(profile?.university, 18);
+
+    for (final product in favoriteProducts) {
+      addKeyword(product.category, 16);
+      addKeyword(product.author, 12);
+      addKeyword(product.title, 10);
+      addKeyword(_typeRecommendationLabel(product.type), 10);
+      addKeyword(product.university, 11);
+    }
+
+    for (final order in purchaseHistory) {
+      addKeyword(order.productTitle, 18);
+      addKeyword(order.productAuthor, 14);
+      addKeyword(order.productUniversity, 14);
+      addKeyword(_typeRecommendationLabel(order.productType), 12);
+    }
+
+    for (final conversation in conversations) {
+      addKeyword(conversation.productTitle, 12);
+      addKeyword(_typeRecommendationLabel(conversation.productType), 10);
+    }
+
+    for (final product in featuredProducts) {
+      addKeyword(product.category, 6);
+      addKeyword(product.title, 5);
+      addKeyword(product.author, 4);
+    }
+
+    for (final product in recentProducts) {
+      addKeyword(product.category, 4);
+      addKeyword(product.author, 3);
+      addKeyword(_typeRecommendationLabel(product.type), 3);
+    }
+
+    final sorted = scores.entries.toList()
+      ..sort((a, b) {
+        final scoreCompare = b.value.compareTo(a.value);
+        if (scoreCompare != 0) return scoreCompare;
+        return a.key.length.compareTo(b.key.length);
+      });
+
+    return sorted.take(limit).map((entry) => entry.key).toList();
+  }
+
+  Future<List<Product>> getRecommendedProducts({int limit = 6}) async {
+    final currentUserId = _auth.currentUser?.uid;
+    final allProducts = await getAllProducts();
+    if (allProducts.isEmpty) return const [];
+
+    final profile = await getCurrentUserProfile();
+    final favoriteProducts = await getFavoriteProducts();
+    final purchaseHistory = await getPurchaseHistory();
+    final conversations = await _getCurrentUserConversationsForRecommendation();
+
+    final favoriteIds = favoriteProducts.map((item) => item.id).toSet();
+    final favoriteCategories = favoriteProducts
+        .map((item) => _normalizeRecommendationText(item.category))
+        .whereType<String>()
+        .toSet();
+    final favoriteAuthors = favoriteProducts
+        .map((item) => _normalizeRecommendationText(item.author))
+        .whereType<String>()
+        .toSet();
+    final purchasedTitles = purchaseHistory
+        .map((item) => _normalizeRecommendationText(item.productTitle))
+        .whereType<String>()
+        .toSet();
+    final purchasedUniversities = purchaseHistory
+        .map((item) => _normalizeRecommendationText(item.productUniversity))
+        .whereType<String>()
+        .toSet();
+    final purchasedTypes = purchaseHistory
+        .map((item) => _normalizeRecommendationText(item.productType))
+        .whereType<String>()
+        .toSet();
+    final chattedTitles = conversations
+        .map((item) => _normalizeRecommendationText(item.productTitle))
+        .whereType<String>()
+        .toSet();
+    final chattedTypes = conversations
+        .map((item) => _normalizeRecommendationText(item.productType))
+        .whereType<String>()
+        .toSet();
+    final profileUniversity = _normalizeRecommendationText(profile?.university);
+
+    final candidates = allProducts.where((product) {
+      if (currentUserId == null) return true;
+      return product.sellerUid != currentUserId;
+    }).toList();
+
+    candidates.sort((a, b) {
+      final scoreA = _recommendationScoreForProduct(
+        a,
+        favoriteIds: favoriteIds,
+        favoriteCategories: favoriteCategories,
+        favoriteAuthors: favoriteAuthors,
+        purchasedTitles: purchasedTitles,
+        purchasedUniversities: purchasedUniversities,
+        purchasedTypes: purchasedTypes,
+        chattedTitles: chattedTitles,
+        chattedTypes: chattedTypes,
+        profileUniversity: profileUniversity,
+      );
+      final scoreB = _recommendationScoreForProduct(
+        b,
+        favoriteIds: favoriteIds,
+        favoriteCategories: favoriteCategories,
+        favoriteAuthors: favoriteAuthors,
+        purchasedTitles: purchasedTitles,
+        purchasedUniversities: purchasedUniversities,
+        purchasedTypes: purchasedTypes,
+        chattedTitles: chattedTitles,
+        chattedTypes: chattedTypes,
+        profileUniversity: profileUniversity,
+      );
+      if (scoreA != scoreB) {
+        return scoreB.compareTo(scoreA);
+      }
+      final aDate = a.createdAt ?? DateTime(1970);
+      final bDate = b.createdAt ?? DateTime(1970);
+      return bDate.compareTo(aDate);
+    });
+
+    return candidates.take(limit).toList();
+  }
+
   Future<List<Product>> getProductsBySeller(String sellerUid) async {
     try {
-      final snapshot = await _products
-          .where('sellerUid', isEqualTo: sellerUid)
-          .get();
+      final snapshot = await _products.where('sellerUid', isEqualTo: sellerUid).get();
       final products = snapshot.docs.map(_productFromDoc).toList();
       products.sort(
         (a, b) => (b.createdAt ?? DateTime(1970)).compareTo(
@@ -143,25 +480,58 @@ class FirebaseDataService {
     if (user == null) return [];
 
     try {
-      final snapshot = await _orders
-          .where('buyerUid', isEqualTo: user.uid)
-          .get();
-
-      final records = snapshot.docs.map((doc) {
-        final data = doc.data();
-        return PurchaseRecord.fromMap({'id': doc.id, ...data});
-      }).toList();
+      final snapshot = await _orders.where('buyerUid', isEqualTo: user.uid).get();
+      final records = snapshot.docs
+          .map((doc) => PurchaseRecord.fromMap({'id': doc.id, ...doc.data()}))
+          .toList();
       records.sort((a, b) {
-        final aPending = a.status == 'pending_payment' ? 1 : 0;
-        final bPending = b.status == 'pending_payment' ? 1 : 0;
-        if (aPending != bPending) {
-          return bPending.compareTo(aPending);
+        final aWeight = _attentionWeight(a.status);
+        final bWeight = _attentionWeight(b.status);
+        if (aWeight != bWeight) {
+          return bWeight.compareTo(aWeight);
         }
         return b.createdAt.compareTo(a.createdAt);
       });
       return records;
     } on FirebaseException catch (error) {
       if (error.code == 'permission-denied') return [];
+      rethrow;
+    }
+  }
+
+  Future<List<PurchaseRecord>> getAllOrders({
+    List<String>? statuses,
+  }) async {
+    try {
+      final snapshot = await _orders.get();
+      var records = snapshot.docs
+          .map((doc) => PurchaseRecord.fromMap({'id': doc.id, ...doc.data()}))
+          .toList();
+      if (statuses != null && statuses.isNotEmpty) {
+        records = records.where((order) => statuses.contains(order.status)).toList();
+      }
+      records.sort((a, b) {
+        final aWeight = _attentionWeight(a.status);
+        final bWeight = _attentionWeight(b.status);
+        if (aWeight != bWeight) {
+          return bWeight.compareTo(aWeight);
+        }
+        return b.createdAt.compareTo(a.createdAt);
+      });
+      return records;
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') return [];
+      rethrow;
+    }
+  }
+
+  Future<PurchaseRecord?> getOrderById(String orderId) async {
+    try {
+      final snapshot = await _orders.doc(orderId).get();
+      if (!snapshot.exists || snapshot.data() == null) return null;
+      return PurchaseRecord.fromMap({'id': snapshot.id, ...snapshot.data()!});
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') return null;
       rethrow;
     }
   }
@@ -174,6 +544,7 @@ class FirebaseDataService {
   }) async {
     final user = _auth.currentUser;
     if (user == null || items.isEmpty) return const [];
+    final profile = await ensureUserProfile(user);
 
     final batch = _firestore.batch();
     final now = DateTime.now().toIso8601String();
@@ -182,6 +553,8 @@ class FirebaseDataService {
     for (final item in items) {
       final orderRef = _orders.doc();
       orderIds.add(orderRef.id);
+      final sellerPayoutAmount = item.totalPrice * AdminConfig.sellerPayoutRate;
+      final platformFeeAmount = item.totalPrice - sellerPayoutAmount;
       batch.set(orderRef, {
         'buyerUid': user.uid,
         'productId': item.product.id,
@@ -196,7 +569,15 @@ class FirebaseDataService {
         'totalPrice': item.totalPrice,
         'status': status,
         'paymentMethod': paymentMethod,
-        'transferNote': transferNotesBySeller?[item.product.sellerUid ?? ''] ?? '',
+        'transferNote':
+            transferNotesBySeller?[item.product.sellerUid ?? ''] ?? '',
+        'recipientName': profile.name,
+        'recipientPhone': profile.phone,
+        'shippingAddress': profile.shippingAddress,
+        'sellerPayoutAmount': sellerPayoutAmount,
+        'platformFeeAmount': platformFeeAmount,
+        'payoutReleased': false,
+        'payoutMessage': '',
         'createdAt': now,
       });
     }
@@ -207,6 +588,68 @@ class FirebaseDataService {
       if (error.code != 'permission-denied') rethrow;
       return const [];
     }
+    return orderIds;
+  }
+
+  Future<List<String>> createWalletPaidOrdersFromCart(List<CartItem> items) async {
+    final user = _auth.currentUser;
+    if (user == null || items.isEmpty) return const [];
+
+    final profile = await ensureUserProfile(user);
+    final totalAmount = items.fold<double>(
+      0,
+      (total, item) => total + item.totalPrice,
+    );
+    if (profile.walletBalance < totalAmount) {
+      throw StateError('insufficient_wallet_balance');
+    }
+
+    final batch = _firestore.batch();
+    final now = DateTime.now().toIso8601String();
+    final orderIds = <String>[];
+
+    for (final item in items) {
+      final orderRef = _orders.doc();
+      orderIds.add(orderRef.id);
+      final sellerPayoutAmount = item.totalPrice * AdminConfig.sellerPayoutRate;
+      final platformFeeAmount = item.totalPrice - sellerPayoutAmount;
+      batch.set(orderRef, {
+        'buyerUid': user.uid,
+        'productId': item.product.id,
+        'productTitle': item.product.title,
+        'productAuthor': item.product.author,
+        'productUniversity': item.product.university,
+        'productType': item.product.type,
+        'productImageUrl': item.product.imageUrl,
+        'sellerUid': item.product.sellerUid ?? '',
+        'productPrice': item.product.price,
+        'quantity': item.quantity,
+        'totalPrice': item.totalPrice,
+        'status': 'awaiting_shipment',
+        'paymentMethod': 'wallet',
+        'transferNote': 'WALLET-${user.uid.substring(0, user.uid.length < 6 ? user.uid.length : 6).toUpperCase()}',
+        'recipientName': profile.name,
+        'recipientPhone': profile.phone,
+        'shippingAddress': profile.shippingAddress,
+        'sellerPayoutAmount': sellerPayoutAmount,
+        'platformFeeAmount': platformFeeAmount,
+        'payoutReleased': false,
+        'payoutMessage': '',
+        'createdAt': now,
+      });
+    }
+
+    batch.set(_users.doc(user.uid), {
+      'walletBalance': profile.walletBalance - totalAmount,
+    }, SetOptions(merge: true));
+
+    try {
+      await batch.commit();
+    } on FirebaseException catch (error) {
+      if (error.code != 'permission-denied') rethrow;
+      return const [];
+    }
+
     return orderIds;
   }
 
@@ -252,14 +695,11 @@ class FirebaseDataService {
     if (user == null) return [];
 
     try {
-      final snapshot = await _favorites
-          .where('userUid', isEqualTo: user.uid)
-          .get();
-
+      final snapshot = await _favorites.where('userUid', isEqualTo: user.uid).get();
       final docs = [...snapshot.docs]
         ..sort(
-          (a, b) => ((b.data()['createdAt'] ?? '') as String).compareTo(
-            (a.data()['createdAt'] ?? '') as String,
+          (a, b) => (b.data()['createdAt'] ?? '').toString().compareTo(
+            (a.data()['createdAt'] ?? '').toString(),
           ),
         );
 
@@ -308,11 +748,728 @@ class FirebaseDataService {
     await _products.doc(product.id).set(product.toFirestore());
   }
 
+  Future<void> adminDeleteProduct(String productId) async {
+    try {
+      await _products.doc(productId).delete();
+    } on FirebaseException catch (error) {
+      if (error.code != 'permission-denied') rethrow;
+    }
+  }
+
+  Future<void> adminSetUserBanStatus(String userId, bool isBanned) async {
+    try {
+      await _users.doc(userId).set({
+        'isBanned': isBanned,
+      }, SetOptions(merge: true));
+    } on FirebaseException catch (error) {
+      if (error.code != 'permission-denied') rethrow;
+    }
+  }
+
+  Future<void> adminDeleteUser(String userId) async {
+    try {
+      final batch = _firestore.batch();
+      final userSnapshot = await _users.doc(userId).get();
+      final userData = userSnapshot.data() ?? const <String, dynamic>{};
+
+      final userProducts = await _products
+          .where('sellerUid', isEqualTo: userId)
+          .get();
+      for (final doc in userProducts.docs) {
+        batch.delete(doc.reference);
+      }
+
+      final userFavorites = await _favorites
+          .where('userUid', isEqualTo: userId)
+          .get();
+      for (final doc in userFavorites.docs) {
+        batch.delete(doc.reference);
+      }
+
+      final userNotifications = await _notifications
+          .where('userUid', isEqualTo: userId)
+          .get();
+      for (final doc in userNotifications.docs) {
+        batch.delete(doc.reference);
+      }
+
+      final userWalletRequests = await _walletRequests
+          .where('userUid', isEqualTo: userId)
+          .get();
+      for (final doc in userWalletRequests.docs) {
+        batch.delete(doc.reference);
+      }
+
+      batch.set(_users.doc(userId), {
+        'name': userData['name'] ?? 'Tai khoan da bi xoa',
+        'email': userData['email'] ?? '',
+        'phone': '',
+        'university': '',
+        'avatarBase64': null,
+        'walletBalance': 0,
+        'totalPurchases': 0,
+        'totalSales': 0,
+        'isBanned': true,
+        'deletedAt': DateTime.now().toIso8601String(),
+      }, SetOptions(merge: true));
+      await batch.commit();
+    } on FirebaseException catch (error) {
+      if (error.code != 'permission-denied') rethrow;
+    }
+  }
+
+  Future<void> confirmAdminPayment(String orderId) async {
+    await _updateOrderWithNotification(
+      orderId: orderId,
+      updates: {
+        'status': 'awaiting_shipment',
+        'adminConfirmedAt': DateTime.now().toIso8601String(),
+      },
+      notifyUserField: 'buyerUid',
+      title: 'Admin da xac nhan thanh toan',
+      body:
+          'Don hang $orderId da duoc admin xac nhan da nhan tien vao tai khoan trung gian.',
+      type: 'order_payment_confirmed',
+    );
+  }
+
+  Future<void> markOrderDelivered(String orderId) async {
+    await _updateOrderWithNotification(
+      orderId: orderId,
+      updates: {
+        'status': 'delivered_pending_release',
+        'deliveredAt': DateTime.now().toIso8601String(),
+      },
+      notifyUserField: 'sellerUid',
+      title: 'Don hang da duoc giao',
+      body:
+          'Don hang $orderId da duoc admin danh dau giao thanh cong. Buoc tiep theo la giai ngan 95% cho ban.',
+      type: 'order_delivered',
+    );
+  }
+
+  Future<void> releaseSellerPayout(String orderId) async {
+    final snapshot = await _orders.doc(orderId).get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null) return;
+
+    final payoutAmount = (data['sellerPayoutAmount'] as num?)?.toDouble() ?? 0;
+    final sellerUid = data['sellerUid'] as String? ?? '';
+    final sellerProfile = sellerUid.trim().isEmpty
+        ? null
+        : await getUserProfileById(sellerUid);
+    final currentWallet = sellerProfile?.walletBalance ?? 0;
+    final message =
+        'Admin da cong ${payoutAmount.toStringAsFixed(0)}d vao vi EduShare cua ban, tuong ung 95% gia tri don hang $orderId.';
+
+    try {
+      final batch = _firestore.batch();
+      batch.set(_orders.doc(orderId), {
+        'status': 'completed',
+        'payoutReleased': true,
+        'payoutReleasedAt': DateTime.now().toIso8601String(),
+        'payoutMessage': message,
+      }, SetOptions(merge: true));
+      if (sellerUid.trim().isNotEmpty) {
+        batch.set(_users.doc(sellerUid), {
+          'walletBalance': currentWallet + payoutAmount,
+        }, SetOptions(merge: true));
+      }
+      await batch.commit();
+
+      if (sellerUid.trim().isNotEmpty) {
+        await _createNotification(
+          userUid: sellerUid,
+          orderId: orderId,
+          title: 'Admin da giai ngan tien hang',
+          body: message,
+          type: 'seller_payout_released',
+        );
+      }
+    } on FirebaseException catch (error) {
+      if (error.code != 'permission-denied') rethrow;
+    }
+  }
+
+  Future<void> approveWalletDeposit(String requestId) async {
+    final snapshot = await _walletRequests.doc(requestId).get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null) return;
+    if ((data['status'] as String? ?? '') != 'pending') return;
+
+    final userUid = data['userUid'] as String? ?? '';
+    if (userUid.trim().isEmpty) return;
+    final creditedAmount = (data['creditedAmount'] as num?)?.toDouble() ?? 0;
+    final userProfile = await getUserProfileById(userUid);
+    final currentWallet = userProfile?.walletBalance ?? 0;
+
+    try {
+      final batch = _firestore.batch();
+      batch.set(_walletRequests.doc(requestId), {
+        'status': 'completed',
+        'completedAt': DateTime.now().toIso8601String(),
+      }, SetOptions(merge: true));
+      batch.set(_users.doc(userUid), {
+        'walletBalance': currentWallet + creditedAmount,
+      }, SetOptions(merge: true));
+      await batch.commit();
+
+      await _createNotification(
+        userUid: userUid,
+        orderId: '',
+        title: 'Nap tien da duoc xac nhan',
+        body:
+            'Admin da xac nhan nap tien. Vi EduShare cua ban duoc cong ${creditedAmount.toStringAsFixed(0)}d.',
+        type: 'wallet_deposit_completed',
+      );
+    } on FirebaseException catch (error) {
+      if (error.code != 'permission-denied') rethrow;
+    }
+  }
+
+  Future<void> cancelWalletRequest(String requestId) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    final snapshot = await _walletRequests.doc(requestId).get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null) return;
+
+    final userUid = data['userUid'] as String? ?? '';
+    final status = data['status'] as String? ?? '';
+    final type = data['type'] as String? ?? '';
+
+    if (userUid != user.uid || status != 'pending') return;
+
+    try {
+      if (type == 'withdrawal') {
+        final profile = await ensureUserProfile(user);
+        final amount = (data['requestedAmount'] as num?)?.toDouble() ?? 0;
+        final batch = _firestore.batch();
+        batch.set(_walletRequests.doc(requestId), {
+          'status': 'cancelled',
+          'completedAt': DateTime.now().toIso8601String(),
+        }, SetOptions(merge: true));
+        batch.set(_users.doc(user.uid), {
+          'walletBalance': profile.walletBalance + amount,
+        }, SetOptions(merge: true));
+        await batch.commit();
+      } else {
+        await _walletRequests.doc(requestId).set({
+          'status': 'cancelled',
+          'completedAt': DateTime.now().toIso8601String(),
+        }, SetOptions(merge: true));
+      }
+    } on FirebaseException catch (error) {
+      if (error.code != 'permission-denied') rethrow;
+    }
+  }
+
+  Future<void> completeWalletWithdrawal(String requestId) async {
+    final snapshot = await _walletRequests.doc(requestId).get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null) return;
+    if ((data['status'] as String? ?? '') != 'pending') return;
+
+    final userUid = data['userUid'] as String? ?? '';
+    if (userUid.trim().isEmpty) return;
+    final amount = (data['requestedAmount'] as num?)?.toDouble() ?? 0;
+
+    try {
+      await _walletRequests.doc(requestId).set({
+        'status': 'completed',
+        'completedAt': DateTime.now().toIso8601String(),
+      }, SetOptions(merge: true));
+
+      await _createNotification(
+        userUid: userUid,
+        orderId: '',
+        title: 'Rut tien da hoan tat',
+        body:
+            'Admin da xu ly yeu cau rut ${amount.toStringAsFixed(0)}d tu vi EduShare cua ban.',
+        type: 'wallet_withdrawal_completed',
+      );
+    } on FirebaseException catch (error) {
+      if (error.code != 'permission-denied') rethrow;
+    }
+  }
+
+  String buildConversationId(String uidA, String uidB) {
+    final ids = [uidA, uidB]..sort();
+    return '${ids.first}_${ids.last}';
+  }
+
+  Future<String?> ensureConversation({
+    required String sellerUid,
+    required String sellerName,
+    required String productId,
+    required String productTitle,
+    required String productType,
+    String? productImageUrl,
+  }) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null || sellerUid.trim().isEmpty) {
+      return null;
+    }
+    if (currentUser.uid == sellerUid) return null;
+
+    final buyerProfile = await ensureUserProfile(currentUser);
+    final sellerProfile = await getUserProfileById(sellerUid);
+    final conversationId = buildConversationId(currentUser.uid, sellerUid);
+    final now = DateTime.now();
+    final conversationRef = _conversations.doc(conversationId);
+
+    try {
+      DateTime createdAt = now;
+      String lastMessage = '';
+      String lastSenderUid = '';
+
+      try {
+        final snapshot = await conversationRef.get();
+        if (snapshot.exists) {
+          createdAt =
+              DateTime.tryParse(
+                (snapshot.data()?['createdAt'] ?? now.toIso8601String())
+                    .toString(),
+              ) ??
+              now;
+          lastMessage = snapshot.data()?['lastMessage'] as String? ?? '';
+          lastSenderUid = snapshot.data()?['lastSenderUid'] as String? ?? '';
+        }
+      } on FirebaseException catch (error) {
+        // Lần đầu khởi tạo conversation, rules hiện tại có thể chặn get()
+        // trên document chưa tồn tại. Khi đó mình vẫn tiếp tục set() vì create
+        // mới là thao tác được cho phép.
+        if (error.code != 'permission-denied') rethrow;
+      }
+
+      final conversation = ChatConversation(
+        id: conversationId,
+        participantIds: [currentUser.uid, sellerUid],
+        participantNames: {
+          currentUser.uid: buyerProfile.name,
+          sellerUid: sellerProfile?.name ?? sellerName,
+        },
+        buyerUid: currentUser.uid,
+        sellerUid: sellerUid,
+        productId: productId,
+        productTitle: productTitle,
+        productType: productType,
+        productImageUrl: productImageUrl,
+        lastMessage: lastMessage,
+        lastSenderUid: lastSenderUid,
+        createdAt: createdAt,
+        updatedAt: now,
+      );
+
+      await conversationRef.set(
+        conversation.toFirestore(),
+        SetOptions(merge: true),
+      );
+      return conversationId;
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') return null;
+      rethrow;
+    }
+  }
+
+  Future<String?> ensureConversationForProduct({
+    required Product product,
+  }) async {
+    return ensureConversation(
+      sellerUid: product.sellerUid ?? '',
+      sellerName: product.author,
+      productId: product.id,
+      productTitle: product.title,
+      productType: product.type,
+      productImageUrl: product.imageUrl,
+    );
+  }
+
+  Future<String?> ensureAdminConversation({
+    String topic = 'Ho tro EduShare',
+  }) async {
+    final admin = await getPrimaryAdminProfile();
+    if (admin == null) return null;
+
+    return ensureConversation(
+      sellerUid: admin.id,
+      sellerName: admin.name,
+      productId: 'support_admin',
+      productTitle: topic,
+      productType: 'dung_cu',
+      productImageUrl: null,
+    );
+  }
+
+  Stream<List<ChatConversation>> watchConversations() {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      return Stream.value(const []);
+    }
+
+    return _conversations
+        .where('participantIds', arrayContains: currentUser.uid)
+        .snapshots()
+        .map((snapshot) {
+          final conversations = snapshot.docs
+              .map(
+                (doc) => ChatConversation.fromMap({'id': doc.id, ...doc.data()}),
+              )
+              .toList();
+          conversations.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+          return conversations;
+        });
+  }
+
+  Stream<List<ChatMessage>> watchMessages(String conversationId) {
+    return _conversations
+        .doc(conversationId)
+        .collection('messages')
+        .snapshots()
+        .map((snapshot) {
+          final messages = snapshot.docs
+              .map((doc) => ChatMessage.fromMap({'id': doc.id, ...doc.data()}))
+              .toList();
+          messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+          return messages;
+        });
+  }
+
+  Future<void> sendChatMessage({
+    required String conversationId,
+    required String text,
+  }) async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return;
+
+    final normalizedText = text.trim();
+    if (normalizedText.isEmpty) return;
+
+    final senderProfile = await ensureUserProfile(currentUser);
+    final messageRef = _conversations
+        .doc(conversationId)
+        .collection('messages')
+        .doc();
+    final now = DateTime.now();
+    final message = ChatMessage(
+      id: messageRef.id,
+      conversationId: conversationId,
+      senderUid: currentUser.uid,
+      senderName: senderProfile.name,
+      text: normalizedText,
+      createdAt: now,
+    );
+
+    try {
+      final conversationSnapshot = await _conversations.doc(conversationId).get();
+      final conversationData = conversationSnapshot.data() ?? const <String, dynamic>{};
+      await messageRef.set(message.toFirestore());
+      await _conversations.doc(conversationId).set({
+        'lastMessage': normalizedText,
+        'lastSenderUid': currentUser.uid,
+        'updatedAt': now.toIso8601String(),
+      }, SetOptions(merge: true));
+
+      final participantIds =
+          (conversationData['participantIds'] as List<dynamic>? ?? const [])
+              .map((item) => item.toString())
+              .toList();
+      final partnerUid = participantIds.firstWhere(
+        (id) => id != currentUser.uid,
+        orElse: () => '',
+      );
+      if (partnerUid.isNotEmpty) {
+        await _createNotification(
+          userUid: partnerUid,
+          orderId: '',
+          title: 'Tin nhan moi tu ${senderProfile.name}',
+          body: normalizedText,
+          type: 'chat_message',
+        );
+      }
+
+      final productId = conversationData['productId'] as String? ?? '';
+      final senderIsAdmin =
+          senderProfile.isAdmin ||
+          AdminConfig.isAdminEmail(currentUser.email?.trim().toLowerCase());
+      if (productId == 'support_admin' && !senderIsAdmin && partnerUid.isNotEmpty) {
+        await _sendAutomaticSupportReply(
+          conversationId: conversationId,
+          adminUid: partnerUid,
+          conversationData: conversationData,
+        );
+      }
+    } on FirebaseException catch (error) {
+      if (error.code != 'permission-denied') rethrow;
+    }
+  }
+
+  Stream<List<AppNotification>> watchNotifications() {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      return Stream.value(const []);
+    }
+
+    return _notifications
+        .where('userUid', isEqualTo: currentUser.uid)
+        .snapshots()
+        .map((snapshot) {
+          final items = snapshot.docs
+              .map(
+                (doc) => AppNotification.fromMap({'id': doc.id, ...doc.data()}),
+              )
+              .toList();
+          items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return items;
+        });
+  }
+
+  Future<void> markNotificationRead(String notificationId) async {
+    try {
+      await _notifications.doc(notificationId).set({
+        'isRead': true,
+      }, SetOptions(merge: true));
+    } on FirebaseException catch (error) {
+      if (error.code != 'permission-denied') rethrow;
+    }
+  }
+
   Product _productFromDoc(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
     return Product.fromMap({'id': doc.id, ...doc.data()});
   }
 
   Product _productFromSnapshot(DocumentSnapshot<Map<String, dynamic>> doc) {
     return Product.fromMap({'id': doc.id, ...?doc.data()});
+  }
+
+  int _attentionWeight(String status) {
+    return switch (status) {
+      'pending_admin_confirmation' => 5,
+      'awaiting_shipment' => 4,
+      'delivered_pending_release' => 3,
+      'pending_payment' => 2,
+      'pending_cod' => 1,
+      _ => 0,
+    };
+  }
+
+  Future<void> _updateOrderWithNotification({
+    required String orderId,
+    required Map<String, dynamic> updates,
+    required String notifyUserField,
+    required String title,
+    required String body,
+    required String type,
+  }) async {
+    final snapshot = await _orders.doc(orderId).get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null) return;
+
+    try {
+      await _orders.doc(orderId).set(updates, SetOptions(merge: true));
+      final userUid = data[notifyUserField] as String? ?? '';
+      if (userUid.trim().isEmpty) return;
+      await _createNotification(
+        userUid: userUid,
+        orderId: orderId,
+        title: title,
+        body: body,
+        type: type,
+      );
+    } on FirebaseException catch (error) {
+      if (error.code != 'permission-denied') rethrow;
+    }
+  }
+
+  Future<void> _createNotification({
+    required String userUid,
+    required String orderId,
+    required String title,
+    required String body,
+    required String type,
+  }) async {
+    if (userUid.trim().isEmpty) return;
+
+    try {
+      final notificationRef = _notifications.doc();
+      await notificationRef.set({
+        'userUid': userUid,
+        'orderId': orderId,
+        'title': title,
+        'body': body,
+        'type': type,
+        'isRead': false,
+        'createdAt': DateTime.now().toIso8601String(),
+      });
+    } on FirebaseException catch (error) {
+      if (error.code != 'permission-denied') rethrow;
+    }
+  }
+
+  Future<void> _sendAutomaticSupportReply({
+    required String conversationId,
+    required String adminUid,
+    required Map<String, dynamic> conversationData,
+  }) async {
+    final messagesRef = _conversations.doc(conversationId).collection('messages');
+    final latestSnapshot = await messagesRef
+        .orderBy('createdAt', descending: true)
+        .limit(1)
+        .get();
+    final latestText = latestSnapshot.docs.isEmpty
+        ? ''
+        : (latestSnapshot.docs.first.data()['text'] as String? ?? '').trim();
+    if (latestText == _supportAutoReplyText) return;
+
+    var adminName = 'Admin EduShare';
+    final participantNames = conversationData['participantNames'];
+    if (participantNames is Map && participantNames[adminUid] != null) {
+      final rawName = participantNames[adminUid].toString().trim();
+      if (rawName.isNotEmpty) {
+        adminName = rawName;
+      }
+    }
+
+    final now = DateTime.now().add(const Duration(milliseconds: 250));
+    final autoReplyRef = messagesRef.doc();
+    final autoReply = ChatMessage(
+      id: autoReplyRef.id,
+      conversationId: conversationId,
+      senderUid: adminUid,
+      senderName: adminName,
+      text: _supportAutoReplyText,
+      createdAt: now,
+    );
+
+    await autoReplyRef.set(autoReply.toFirestore());
+    await _conversations.doc(conversationId).set({
+      'lastMessage': _supportAutoReplyText,
+      'lastSenderUid': adminUid,
+      'updatedAt': now.toIso8601String(),
+    }, SetOptions(merge: true));
+  }
+
+  static const String _supportAutoReplyText =
+      'Cam on ban da nhan tin. Admin se som tra loi ban ngay thoi.';
+
+  Future<void> _notifyAdmins({
+    required String title,
+    required String body,
+    required String type,
+  }) async {
+    final adminIds = await _getAdminUserIds();
+    for (final adminId in adminIds) {
+      await _createNotification(
+        userUid: adminId,
+        orderId: '',
+        title: title,
+        body: body,
+        type: type,
+      );
+    }
+  }
+
+  Future<List<String>> _getAdminUserIds() async {
+    try {
+      final snapshot = await _users.get();
+      return snapshot.docs
+          .where((doc) {
+            final data = doc.data();
+            final email = (data['email'] as String?)?.trim().toLowerCase();
+            final isAdmin = data['isAdmin'] as bool? ?? data['is_admin'] as bool? ?? false;
+            return isAdmin || AdminConfig.isAdminEmail(email);
+          })
+          .map((doc) => doc.id)
+          .toSet()
+          .toList();
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') return [];
+      rethrow;
+    }
+  }
+
+  Future<List<ChatConversation>> _getCurrentUserConversationsForRecommendation() async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return const [];
+
+    try {
+      final snapshot = await _conversations
+          .where('participantIds', arrayContains: currentUser.uid)
+          .get();
+      return snapshot.docs
+          .map((doc) => ChatConversation.fromMap({'id': doc.id, ...doc.data()}))
+          .toList();
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') return const [];
+      rethrow;
+    }
+  }
+
+  int _recommendationScoreForProduct(
+    Product product, {
+    required Set<String> favoriteIds,
+    required Set<String> favoriteCategories,
+    required Set<String> favoriteAuthors,
+    required Set<String> purchasedTitles,
+    required Set<String> purchasedUniversities,
+    required Set<String> purchasedTypes,
+    required Set<String> chattedTitles,
+    required Set<String> chattedTypes,
+    required String? profileUniversity,
+  }) {
+    var score = 0;
+    final normalizedCategory = _normalizeRecommendationText(product.category);
+    final normalizedAuthor = _normalizeRecommendationText(product.author);
+    final normalizedTitle = _normalizeRecommendationText(product.title);
+    final normalizedUniversity = _normalizeRecommendationText(product.university);
+    final normalizedType = _normalizeRecommendationText(product.type);
+
+    if (favoriteIds.contains(product.id)) score += 100;
+    if (normalizedCategory != null && favoriteCategories.contains(normalizedCategory)) {
+      score += 24;
+    }
+    if (normalizedAuthor != null && favoriteAuthors.contains(normalizedAuthor)) {
+      score += 14;
+    }
+    if (normalizedTitle != null && purchasedTitles.contains(normalizedTitle)) {
+      score += 18;
+    }
+    if (normalizedUniversity != null &&
+        purchasedUniversities.contains(normalizedUniversity)) {
+      score += 18;
+    }
+    if (profileUniversity != null && normalizedUniversity == profileUniversity) {
+      score += 20;
+    }
+    if (normalizedType != null && purchasedTypes.contains(normalizedType)) {
+      score += 14;
+    }
+    if (normalizedTitle != null && chattedTitles.contains(normalizedTitle)) {
+      score += 12;
+    }
+    if (normalizedType != null && chattedTypes.contains(normalizedType)) {
+      score += 10;
+    }
+    if (product.isFeatured) score += 8;
+    if (product.isNew) score += 6;
+    if (product.isFree) score += 3;
+    return score;
+  }
+
+  String? _normalizeRecommendationText(String? value) {
+    final normalized = value?.trim().toLowerCase();
+    if (normalized == null || normalized.isEmpty) return null;
+    return normalized;
+  }
+
+  String? _typeRecommendationLabel(String? type) {
+    return switch (_normalizeRecommendationText(type)) {
+      'sach' => 'Sach giao trinh',
+      'may_tinh' => 'May tinh hoc tap',
+      've' => 'Do ve my thuat',
+      'dung_cu' => 'Dung cu hoc tap',
+      _ => type?.trim(),
+    };
   }
 }

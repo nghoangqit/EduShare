@@ -1,12 +1,15 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../models/app_notification.dart';
 import '../models/category.dart';
 import '../models/product.dart';
 import '../models/user_profile.dart';
 import '../services/firebase_data_service.dart';
 import '../utils/constants.dart';
 import '../widgets/product_card.dart';
+import 'notification_center_screen.dart';
 import 'profile_screen.dart';
+import 'search_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,6 +24,8 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Product> _allProducts = [];
   List<Product> _featuredProducts = [];
   List<Product> _recentProducts = [];
+  List<Product> _recommendedProducts = [];
+  List<String> _recommendedKeywords = [];
   UserProfile? _profile;
   bool _loading = true;
   String? _selectedCategory;
@@ -47,12 +52,16 @@ class _HomeScreenState extends State<HomeScreen> {
     final all = await _dataService.getAllProducts();
     final featured = await _dataService.getFeaturedProducts();
     final recent = await _dataService.getRecentProducts();
+    final recommended = await _dataService.getRecommendedProducts(limit: 6);
+    final keywords = await _dataService.getRecommendedSearchKeywords(limit: 5);
     final profile = await _dataService.getCurrentUserProfile();
     if (!mounted) return;
     setState(() {
       _allProducts = all;
       _featuredProducts = featured;
       _recentProducts = recent;
+      _recommendedProducts = recommended;
+      _recommendedKeywords = keywords;
       _profile = profile;
       _loading = false;
     });
@@ -108,6 +117,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     SliverToBoxAdapter(child: _buildSearchBar()),
                     SliverToBoxAdapter(child: _buildPromoStrip()),
                     SliverToBoxAdapter(child: _buildCategories()),
+                    if (_recommendedProducts.isNotEmpty) ...[
+                      SliverToBoxAdapter(
+                        child: _sectionHeader(
+                          'Danh cho ban',
+                          _recommendedSubtitle(),
+                        ),
+                      ),
+                      SliverToBoxAdapter(child: _productGrid(_recommendedProducts)),
+                    ],
                     if (_selectedCategory != null && _selectedCategory != 'all')
                       SliverToBoxAdapter(child: _buildFilterBanner(selectedCategory.name)),
                     if (filteredFeatured.isNotEmpty) ...[
@@ -279,30 +297,55 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _notificationButton() {
-    return Stack(
-      children: [
-        Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(18),
+    return StreamBuilder<List<AppNotification>>(
+      stream: _dataService.watchNotifications(),
+      builder: (context, snapshot) {
+        final notifications = snapshot.data ?? const <AppNotification>[];
+        final unreadCount = notifications.where((item) => !item.isRead).length;
+        return GestureDetector(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => NotificationCenterScreen()),
+            );
+          },
+          child: Stack(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: const Icon(
+                  Icons.notifications_none_rounded,
+                  color: Colors.white,
+                ),
+              ),
+              if (unreadCount > 0)
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFFD76A),
+                      borderRadius: BorderRadius.all(Radius.circular(999)),
+                    ),
+                    child: Text(
+                      unreadCount > 9 ? '9+' : '$unreadCount',
+                      style: const TextStyle(
+                        color: AppColors.textDark,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
-          child: const Icon(Icons.notifications_none_rounded, color: Colors.white),
-        ),
-        Positioned(
-          top: 9,
-          right: 10,
-          child: Container(
-            width: 9,
-            height: 9,
-            decoration: const BoxDecoration(
-              color: Color(0xFFFFD76A),
-              shape: BoxShape.circle,
-            ),
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 
@@ -344,71 +387,119 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSearchBar() {
+    final hintKeywords = _recommendedKeywords.take(2).toList();
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 18,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: AppColors.primaryLight,
-                borderRadius: BorderRadius.circular(14),
+      child: GestureDetector(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SearchScreen()),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 18,
+                offset: const Offset(0, 10),
               ),
-              child: const Icon(Icons.search_rounded, color: AppColors.primary),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            ],
+          ),
+          child: Column(
+            children: [
+              Row(
                 children: [
-                  Text(
-                    'Tim kiem thong minh',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textDark),
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryLight,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(Icons.search_rounded, color: AppColors.primary),
                   ),
-                  SizedBox(height: 3),
-                  Text(
-                    'Sach, may tinh, dung cu va nhieu hon nua',
-                    style: TextStyle(fontSize: 12.5, color: AppColors.textGray),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Tim kiem thong minh',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textDark),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          hintKeywords.isEmpty
+                              ? 'Sach, may tinh, dung cu va nhieu hon nua'
+                              : 'Goi y: ${hintKeywords.join(' • ')}',
+                          style: const TextStyle(fontSize: 12.5, color: AppColors.textGray),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF1F8F7),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Row(
-                children: [
-                  Icon(Icons.tune_rounded, size: 16, color: AppColors.primary),
-                  SizedBox(width: 6),
-                  Text(
-                    'Loc',
-                    style: TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F8F7),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.auto_awesome_rounded, size: 16, color: AppColors.primary),
+                        SizedBox(width: 6),
+                        Text(
+                          'Goi y',
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-            ),
-          ],
+              if (_recommendedKeywords.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _recommendedKeywords
+                        .take(4)
+                        .map(
+                          (keyword) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 7,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryLight,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              keyword,
+                              style: const TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 11.8,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
@@ -660,6 +751,14 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+  }
+
+  String _recommendedSubtitle() {
+    final university = _profile?.university.trim() ?? '';
+    if (university.isNotEmpty) {
+      return 'Goi y dua tren truong $university, lich su mua sam va san pham ban da quan tam.';
+    }
+    return 'Goi y dua tren hanh vi tim kiem, san pham quan tam va xu huong hien tai.';
   }
 
   Widget _buildEmptyCategoryState() {

@@ -1,9 +1,10 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 class Formatter {
   static String price(double price) {
-    if (price == 0) return 'Miễn phí';
+    if (price == 0) return '0đ';
     if (price >= 1000000) {
       return '${(price / 1000000).toStringAsFixed(1)}Mđ';
     }
@@ -68,4 +69,44 @@ String imageForProductType(String type) {
     default:
       return 'assets/images/book.png';
   }
+}
+
+bool isInlineImageData(String? value) {
+  if (value == null) return false;
+  return value.trim().startsWith('data:image');
+}
+
+Uint8List? decodeInlineImageData(String? value) {
+  if (!isInlineImageData(value)) return null;
+  try {
+    final raw = value!.trim();
+    final commaIndex = raw.indexOf(',');
+    if (commaIndex == -1) return null;
+    return base64Decode(raw.substring(commaIndex + 1));
+  } catch (_) {
+    return null;
+  }
+}
+
+Widget buildProductImage({
+  required String type,
+  required String? imageUrl,
+  BoxFit fit = BoxFit.cover,
+}) {
+  final inlineBytes = decodeInlineImageData(imageUrl);
+  if (inlineBytes != null) {
+    return Image.memory(inlineBytes, fit: fit);
+  }
+
+  final hasRemoteImage = imageUrl != null && imageUrl.trim().isNotEmpty;
+  if (hasRemoteImage) {
+    return Image.network(
+      imageUrl,
+      fit: fit,
+      errorBuilder: (_, __, ___) =>
+          Image.asset(imageForProductType(type), fit: fit),
+    );
+  }
+
+  return Image.asset(imageForProductType(type), fit: fit);
 }

@@ -2,8 +2,11 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../services/firebase_data_service.dart';
+
 class AuthProvider extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseDataService _dataService = FirebaseDataService.instance;
 
   User? _currentUser;
   bool _loading = true;
@@ -19,6 +22,15 @@ class AuthProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
     _currentUser = _auth.currentUser;
+    if (_currentUser != null) {
+      final profile = await _dataService.getCurrentUserProfile();
+      if (profile?.isBanned == true) {
+        await _auth.signOut();
+        _currentUser = null;
+        _errorMessage =
+            'Tai khoan cua ban da bi khoa boi admin. Vui long lien he ho tro.';
+      }
+    }
     _loading = false;
     notifyListeners();
   }
@@ -35,6 +47,14 @@ class AuthProvider extends ChangeNotifier {
           )
           .timeout(const Duration(seconds: 15));
       _currentUser = credential.user;
+      final profile = await _dataService.getCurrentUserProfile();
+      if (profile?.isBanned == true) {
+        await _auth.signOut();
+        _currentUser = null;
+        _errorMessage =
+            'Tai khoan cua ban da bi khoa boi admin. Vui long lien he ho tro.';
+        return false;
+      }
       return _currentUser != null;
     } on FirebaseAuthException catch (error) {
       _currentUser = null;

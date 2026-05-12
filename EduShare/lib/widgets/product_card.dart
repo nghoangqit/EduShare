@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/product.dart';
@@ -5,6 +6,7 @@ import '../providers/cart_provider.dart';
 import '../services/firebase_data_service.dart';
 import '../utils/constants.dart';
 import '../utils/helpers.dart';
+import '../screens/chat_screen.dart';
 
 class ProductCard extends StatefulWidget {
   final Product product;
@@ -80,7 +82,6 @@ class _ProductCardState extends State<ProductCard> {
   }
 
   Widget _buildImage() {
-    final hasRemoteImage = product.imageUrl != null && product.imageUrl!.trim().isNotEmpty;
     return Stack(
       children: [
         ClipRRect(
@@ -88,14 +89,10 @@ class _ProductCardState extends State<ProductCard> {
           child: SizedBox(
             height: 118,
             width: double.infinity,
-            child: hasRemoteImage
-                ? Image.network(
-                    product.imageUrl!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) =>
-                        Image.asset(imageForProductType(product.type), fit: BoxFit.cover),
-                  )
-                : Image.asset(imageForProductType(product.type), fit: BoxFit.cover),
+            child: buildProductImage(
+              type: product.type,
+              imageUrl: product.imageUrl,
+            ),
           ),
         ),
         if (product.discount > 0) _badge('-${product.discount}%', AppColors.red),
@@ -283,6 +280,11 @@ class _ProductDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    final canChat = product.sellerUid != null &&
+        product.sellerUid!.trim().isNotEmpty &&
+        product.sellerUid != currentUserId;
+
     return Container(
       height: MediaQuery.of(context).size.height * 0.78,
       decoration: const BoxDecoration(
@@ -311,14 +313,10 @@ class _ProductDetailSheet extends StatelessWidget {
                     child: SizedBox(
                       height: 200,
                       width: double.infinity,
-                      child: (product.imageUrl != null && product.imageUrl!.trim().isNotEmpty)
-                          ? Image.network(
-                              product.imageUrl!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Image.asset(imageForProductType(product.type), fit: BoxFit.cover),
-                            )
-                          : Image.asset(imageForProductType(product.type), fit: BoxFit.cover),
+                      child: buildProductImage(
+                        type: product.type,
+                        imageUrl: product.imageUrl,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -370,42 +368,113 @@ class _ProductDetailSheet extends StatelessWidget {
                     const SizedBox(height: 20),
                   ],
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            product.isFree ? 'Mien phi' : Formatter.price(product.price),
-                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.primary),
-                          ),
-                          if (product.originalPrice != null)
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
                             Text(
-                              Formatter.price(product.originalPrice!),
+                              product.isFree
+                                  ? 'Mien phi'
+                                  : Formatter.price(product.price),
                               style: const TextStyle(
-                                fontSize: 13,
-                                color: AppColors.textGray,
-                                decoration: TextDecoration.lineThrough,
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
                               ),
                             ),
-                        ],
-                      ),
-                      Consumer<CartProvider>(
-                        builder: (context, cart, _) => ElevatedButton.icon(
-                          onPressed: () async {
-                            await cart.addItem(product);
-                            if (context.mounted) Navigator.pop(context);
-                          },
-                          icon: const Icon(Icons.shopping_cart_outlined, size: 18),
-                          label: const Text('Them vao gio'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                          ),
+                            if (product.originalPrice != null)
+                              Text(
+                                Formatter.price(product.originalPrice!),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.textGray,
+                                  decoration: TextDecoration.lineThrough,
+                                ),
+                              ),
+                          ],
                         ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: canChat ? 2 : 1,
+                        child: Consumer<CartProvider>(
+                        builder: (context, cart, _) {
+                          return Row(
+                            mainAxisSize: MainAxisSize.max,
+                            children: [
+                              if (canChat) ...[
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () {
+                                      final navigator = Navigator.of(context);
+                                      navigator.pop();
+                                      navigator.push(
+                                        MaterialPageRoute(
+                                          builder: (_) => ChatScreen(
+                                            product: product,
+                                            sellerUid: product.sellerUid!,
+                                            sellerName: product.author,
+                                            productId: product.id,
+                                            productTitle: product.title,
+                                            productType: product.type,
+                                            productImageUrl: product.imageUrl,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                    icon: const Icon(
+                                      Icons.chat_bubble_outline_rounded,
+                                      size: 18,
+                                    ),
+                                    label: const Text('Chat'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: AppColors.primary,
+                                      side: const BorderSide(
+                                        color: AppColors.primary,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                              ],
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: () async {
+                                    await cart.addItem(product);
+                                    if (context.mounted) Navigator.pop(context);
+                                  },
+                                  icon: const Icon(
+                                    Icons.shopping_cart_outlined,
+                                    size: 18,
+                                  ),
+                                  label: const Text('Them vao gio'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 18,
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
                       ),
                     ],
                   ),
