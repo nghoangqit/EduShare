@@ -18,6 +18,13 @@ class CartProvider extends ChangeNotifier {
   bool contains(String productId) =>
       _items.any((i) => i.product.id == productId);
 
+  int quantityFor(String productId) {
+    for (final item in _items) {
+      if (item.product.id == productId) return item.quantity;
+    }
+    return 0;
+  }
+
   Future<void> loadCart() async {
     _loading = true;
     notifyListeners();
@@ -32,10 +39,16 @@ class CartProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addItem(Product product) async {
+  Future<bool> addItem(Product product) async {
+    if (product.isOutOfStock) return false;
+    final currentQuantity = quantityFor(product.id);
+    if (currentQuantity >= product.stockQuantity) {
+      return false;
+    }
     await _db.insertProduct(product, isFeatured: product.isFeatured);
     await _db.addToCart(product.id);
     await loadCart();
+    return true;
   }
 
   Future<void> removeItem(String productId) async {
@@ -44,15 +57,25 @@ class CartProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> updateQuantity(String productId, int quantity) async {
-    await _db.updateCartQuantity(productId, quantity);
-    if (quantity <= 0) {
+  Future<int> updateQuantity(String productId, int quantity) async {
+    final idx = _items.indexWhere((i) => i.product.id == productId);
+    if (idx == -1) return 0;
+
+    final maxQuantity = _items[idx].product.stockQuantity;
+    final normalizedQuantity = quantity <= 0
+        ? 0
+        : quantity > maxQuantity
+        ? maxQuantity
+        : quantity;
+
+    await _db.updateCartQuantity(productId, normalizedQuantity);
+    if (normalizedQuantity <= 0) {
       _items.removeWhere((i) => i.product.id == productId);
     } else {
-      final idx = _items.indexWhere((i) => i.product.id == productId);
-      if (idx != -1) _items[idx].quantity = quantity;
+      _items[idx].quantity = normalizedQuantity;
     }
     notifyListeners();
+    return normalizedQuantity;
   }
 
   Future<void> clearCart() async {

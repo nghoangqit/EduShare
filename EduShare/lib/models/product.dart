@@ -19,6 +19,7 @@ class Product {
   final bool isFeatured;
   final DateTime? createdAt;
   final String? sellerUid;
+  final int stockQuantity;
 
   const Product({
     required this.id,
@@ -35,16 +36,18 @@ class Product {
     required this.imageEmoji,
     this.imageUrl,
     this.description,
-    this.condition = 'Như mới',
+    this.condition = 'NhÆ° má»›i',
     this.isFeatured = false,
     this.createdAt,
     this.sellerUid,
+    this.stockQuantity = 1,
   });
 
   factory Product.fromMap(Map<String, dynamic> map) {
     final dynamic isNewValue = map['is_new'] ?? map['isNew'] ?? false;
     final dynamic isFreeValue = map['is_free'] ?? map['isFree'] ?? false;
-    final dynamic isFeaturedValue = map['is_featured'] ?? map['isFeatured'] ?? false;
+    final dynamic isFeaturedValue =
+        map['is_featured'] ?? map['isFeatured'] ?? false;
 
     bool normalizeBool(dynamic value) {
       if (value is bool) return value;
@@ -60,19 +63,26 @@ class Product {
       price: (map['price'] as num).toDouble(),
       originalPrice: map['original_price'] != null
           ? (map['original_price'] as num).toDouble()
-          : (map['originalPrice'] != null ? (map['originalPrice'] as num).toDouble() : null),
+          : (map['originalPrice'] != null
+                ? (map['originalPrice'] as num).toDouble()
+                : null),
       category: map['category'] as String,
       type: map['type'] as String,
       isNew: normalizeBool(isNewValue),
       isFree: normalizeBool(isFreeValue),
       discount: (map['discount'] as num?)?.toInt() ?? 0,
-      imageEmoji: map['image_emoji'] as String? ?? map['imageEmoji'] as String? ?? '',
+      imageEmoji:
+          map['image_emoji'] as String? ?? map['imageEmoji'] as String? ?? '',
       imageUrl: map['image_url'] as String? ?? map['imageUrl'] as String?,
       description: map['description'] as String?,
-      condition: map['condition'] as String? ?? 'Như mới',
+      condition: map['condition'] as String? ?? 'NhÆ° má»›i',
       isFeatured: normalizeBool(isFeaturedValue),
       createdAt: _parseDate(map['created_at'] ?? map['createdAt']),
       sellerUid: map['seller_uid'] as String? ?? map['sellerUid'] as String?,
+      stockQuantity:
+          (map['stock_quantity'] as num?)?.toInt() ??
+          (map['stockQuantity'] as num?)?.toInt() ??
+          1,
     );
   }
 
@@ -96,6 +106,7 @@ class Product {
       'is_featured': isFeatured ? 1 : 0,
       'created_at': createdAt?.toIso8601String(),
       'seller_uid': sellerUid,
+      'stock_quantity': stockQuantity,
     };
   }
 
@@ -118,8 +129,11 @@ class Product {
       'isFeatured': isFeatured,
       'createdAt': createdAt?.toIso8601String(),
       'sellerUid': sellerUid,
+      'stockQuantity': stockQuantity,
     };
   }
+
+  bool get isOutOfStock => stockQuantity <= 0;
 
   static DateTime? _parseDate(dynamic value) {
     if (value == null) return null;

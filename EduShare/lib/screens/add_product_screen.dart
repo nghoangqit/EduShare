@@ -21,6 +21,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final _titleCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
   final _originalPriceCtrl = TextEditingController();
+  final _stockCtrl = TextEditingController(text: '1');
   final _descCtrl = TextEditingController();
 
   final _dataService = FirebaseDataService.instance;
@@ -62,6 +63,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _titleCtrl.dispose();
     _priceCtrl.dispose();
     _originalPriceCtrl.dispose();
+    _stockCtrl.dispose();
     _descCtrl.dispose();
     super.dispose();
   }
@@ -139,6 +141,25 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     value: _selectedCondition,
                     items: _conditions,
                     onChanged: (v) => setState(() => _selectedCondition = v!),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildTextField(
+                    controller: _stockCtrl,
+                    label: 'So luong san co *',
+                    hint: 'VD: 3',
+                    icon: Icons.inventory_2_outlined,
+                    type: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Vui long nhap so luong san pham';
+                      }
+                      final parsed = int.tryParse(v.trim());
+                      if (parsed == null || parsed <= 0) {
+                        return 'So luong phai lon hon 0';
+                      }
+                      return null;
+                    },
                   ),
                 ],
               ),
@@ -512,6 +533,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
   Widget _buildPreviewCard() {
     final price = double.tryParse(_priceCtrl.text) ?? 0;
     final originalPrice = double.tryParse(_originalPriceCtrl.text);
+    final stockQuantity = int.tryParse(_stockCtrl.text) ?? 0;
     final hasDiscount = originalPrice != null && originalPrice > price && !_isFree;
     final discountPct = hasDiscount ? (((originalPrice - price) / originalPrice) * 100).round() : 0;
     final hasSelectedImage =
@@ -578,6 +600,19 @@ class _AddProductScreenState extends State<AddProductScreen> {
                       ),
                     ],
                   ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  stockQuantity > 0
+                      ? 'Ton kho: $stockQuantity san pham'
+                      : 'Chua nhap so luong',
+                  style: TextStyle(
+                    color: stockQuantity > 0
+                        ? Colors.white.withValues(alpha: 0.82)
+                        : Colors.white54,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
@@ -776,6 +811,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
       final price = _isFree ? 0.0 : (double.tryParse(_priceCtrl.text) ?? 0);
       final originalPrice = _originalPriceCtrl.text.isNotEmpty ? double.tryParse(_originalPriceCtrl.text) : null;
+      final stockQuantity = int.tryParse(_stockCtrl.text.trim()) ?? 0;
       final discount = (originalPrice != null && originalPrice > price && !_isFree)
           ? (((originalPrice - price) / originalPrice) * 100).round()
           : 0;
@@ -802,6 +838,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         isFeatured: _isFeatured,
         createdAt: DateTime.now(),
         sellerUid: user.uid,
+        stockQuantity: stockQuantity,
       );
 
       await _dataService.insertProduct(product);
@@ -883,6 +920,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     _titleCtrl.clear();
     _priceCtrl.clear();
     _originalPriceCtrl.clear();
+    _stockCtrl.text = '1';
     _descCtrl.clear();
     setState(() {
       _selectedType = 'sach';

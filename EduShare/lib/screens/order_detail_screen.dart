@@ -11,10 +11,7 @@ class OrderDetailScreen extends StatelessWidget {
   final PurchaseRecord order;
   static final FirebaseDataService _dataService = FirebaseDataService.instance;
 
-  const OrderDetailScreen({
-    super.key,
-    required this.order,
-  });
+  const OrderDetailScreen({super.key, required this.order});
 
   @override
   Widget build(BuildContext context) {
@@ -105,17 +102,24 @@ class OrderDetailScreen extends StatelessWidget {
             title: 'Thanh toan',
             child: Column(
               children: [
-                    _infoRow(
-                      context,
-                      'Ma don',
-                      order.id,
-                      copyValue: order.id,
-                    ),
-                _infoRow(context, 'Phuong thuc', _paymentMethodLabel(order.paymentMethod)),
+                _infoRow(context, 'Ma don', order.id, copyValue: order.id),
+                _infoRow(
+                  context,
+                  'Phuong thuc',
+                  _paymentMethodLabel(order.paymentMethod),
+                ),
                 _infoRow(context, 'Trang thai', _statusLabel(order.status)),
                 _infoRow(context, 'So luong', '${order.quantity}'),
-                _infoRow(context, 'Don gia', Formatter.price(order.productPrice)),
-                _infoRow(context, 'Tong tien', Formatter.price(order.totalPrice)),
+                _infoRow(
+                  context,
+                  'Don gia',
+                  Formatter.price(order.productPrice),
+                ),
+                _infoRow(
+                  context,
+                  'Tong tien',
+                  Formatter.price(order.totalPrice),
+                ),
                 if (order.paymentMethod == 'admin_escrow' ||
                     order.paymentMethod == 'wallet') ...[
                   _infoRow(
@@ -192,8 +196,8 @@ class OrderDetailScreen extends StatelessWidget {
                 }
 
                 if (seller == null) {
-                    return Column(
-                      children: [
+                  return Column(
+                    children: [
                       _infoRow(context, 'Ten hien thi', order.productAuthor),
                       _infoRow(context, 'Ma nguoi ban', order.sellerUid),
                     ],
@@ -220,11 +224,7 @@ class OrderDetailScreen extends StatelessWidget {
                     if (seller.university.trim().isNotEmpty)
                       _infoRow(context, 'Truong', seller.university),
                     if (seller.hasBankAccount) ...[
-                      _infoRow(
-                        context,
-                        'Ngan hang',
-                        seller.bankName,
-                      ),
+                      _infoRow(context, 'Ngan hang', seller.bankName),
                       _infoRow(context, 'Ma BIN', seller.bankBin),
                       _infoRow(
                         context,
@@ -242,10 +242,8 @@ class OrderDetailScreen extends StatelessWidget {
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton.icon(
-                        onPressed: () => _openOrderChat(
-                          context,
-                          sellerProfile: seller,
-                        ),
+                        onPressed: () =>
+                            _openOrderChat(context, sellerProfile: seller),
                         icon: const Icon(Icons.chat_bubble_outline_rounded),
                         label: Text(
                           _dataService.currentUserId == order.sellerUid
@@ -331,11 +329,7 @@ class OrderDetailScreen extends StatelessWidget {
               color: color.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(18),
             ),
-            child: Icon(
-              _statusIcon(order.status),
-              color: color,
-              size: 28,
-            ),
+            child: Icon(_statusIcon(order.status), color: color, size: 28),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -401,10 +395,7 @@ class OrderDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _sectionCard({
-    required String title,
-    required Widget child,
-  }) {
+  Widget _sectionCard({required String title, required Widget child}) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -451,10 +442,7 @@ class OrderDetailScreen extends StatelessWidget {
             width: 100,
             child: Text(
               label,
-              style: const TextStyle(
-                fontSize: 12.5,
-                color: AppColors.textGray,
-              ),
+              style: const TextStyle(fontSize: 12.5, color: AppColors.textGray),
             ),
           ),
           Expanded(
@@ -627,9 +615,10 @@ class OrderDetailScreen extends StatelessWidget {
       'pending_payment' =>
         'Don dang cho backend xac nhan thanh toan chuyen khoan ngan hang.',
       'pending_cod' => 'Don se duoc thanh toan khi nhan hang.',
-      'completed' => order.payoutMessage.trim().isEmpty
-          ? 'Don da hoan tat va nguoi ban da duoc cong tien vao vi EduShare.'
-          : order.payoutMessage,
+      'completed' =>
+        order.payoutMessage.trim().isEmpty
+            ? 'Don da hoan tat va nguoi ban da duoc cong tien vao vi EduShare.'
+            : order.payoutMessage,
       _ => 'Giao dich da duoc ghi nhan thanh cong.',
     };
   }
@@ -700,7 +689,9 @@ class OrderDetailScreen extends StatelessWidget {
     }
 
     final isSellerViewingOwnOrder = currentUserId == order.sellerUid;
-    final partnerUid = isSellerViewingOwnOrder ? order.buyerUid : order.sellerUid;
+    final partnerUid = isSellerViewingOwnOrder
+        ? order.buyerUid
+        : order.sellerUid;
     if (partnerUid.trim().isEmpty || partnerUid == currentUserId) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

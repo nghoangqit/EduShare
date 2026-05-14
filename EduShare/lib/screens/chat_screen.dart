@@ -100,21 +100,47 @@ class _ChatScreenState extends State<ChatScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
+        elevation: 0,
         titleSpacing: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            Text(
-              widget.sellerName,
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                _isSupportChat
+                    ? Icons.support_agent_rounded
+                    : Icons.chat_bubble_outline_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
             ),
-            Text(
-              _isSupportChat
-                  ? 'Kenh ho tro voi admin EduShare'
-                  : 'Dang trao doi ve san pham',
-              style: TextStyle(
-                fontSize: 11.5,
-                color: Colors.white.withValues(alpha: 0.86),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.sellerName,
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    _isSupportChat
+                        ? 'Kenh ho tro voi admin EduShare'
+                        : 'Dang trao doi ve san pham',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: Colors.white.withValues(alpha: 0.86),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -180,92 +206,124 @@ class _ChatScreenState extends State<ChatScreen> {
                             );
                           }
 
-                          final currentUserId =
-                              _dataService.currentUserId ?? '';
+                          final currentUserId = _dataService.currentUserId ?? '';
 
-                          return ListView.builder(
-                            reverse: true,
-                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                            itemCount: messages.length,
-                            itemBuilder: (context, index) {
-                              final message =
-                                  messages[messages.length - 1 - index];
-                              final isMine =
-                                  message.senderUid == currentUserId;
-                              return Align(
-                                alignment: isMine
-                                    ? Alignment.centerRight
-                                    : Alignment.centerLeft,
-                                child: Container(
-                                  margin: const EdgeInsets.only(bottom: 10),
-                                  constraints: BoxConstraints(
-                                    maxWidth:
-                                        MediaQuery.of(context).size.width * 0.74,
-                                  ),
-                                  padding: const EdgeInsets.fromLTRB(
-                                    14,
-                                    10,
-                                    14,
-                                    10,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isMine
-                                        ? AppColors.primary
-                                        : Colors.white,
-                                    borderRadius: BorderRadius.circular(18),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.04,
-                                        ),
-                                        blurRadius: 10,
-                                        offset: const Offset(0, 6),
+                          return DecoratedBox(
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [Color(0xFFF7FBFB), AppColors.bg],
+                              ),
+                            ),
+                            child: ListView.builder(
+                              reverse: true,
+                              padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
+                              itemCount: messages.length,
+                              itemBuilder: (context, index) {
+                                final message = messages[messages.length - 1 - index];
+                                final isMine = message.senderUid == currentUserId;
+
+                                return Align(
+                                  alignment: isMine
+                                      ? Alignment.centerRight
+                                      : Alignment.centerLeft,
+                                  child: Container(
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    constraints: BoxConstraints(
+                                      maxWidth:
+                                          MediaQuery.of(context).size.width * 0.74,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isMine ? AppColors.primary : Colors.white,
+                                      borderRadius: BorderRadius.only(
+                                        topLeft: const Radius.circular(20),
+                                        topRight: const Radius.circular(20),
+                                        bottomLeft: Radius.circular(isMine ? 20 : 8),
+                                        bottomRight: Radius.circular(isMine ? 8 : 20),
                                       ),
-                                    ],
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      if (!isMine)
-                                        Padding(
-                                          padding:
-                                              const EdgeInsets.only(bottom: 4),
-                                          child: Text(
-                                            message.senderName,
-                                            style: const TextStyle(
-                                              fontSize: 11.5,
-                                              fontWeight: FontWeight.w700,
-                                              color: AppColors.primary,
+                                      border: isMine
+                                          ? null
+                                          : Border.all(
+                                              color: const Color(0xFFE2E8F0),
+                                            ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.04),
+                                          blurRadius: 12,
+                                          offset: const Offset(0, 6),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        14,
+                                        12,
+                                        14,
+                                        10,
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          if (!isMine)
+                                            Padding(
+                                              padding: const EdgeInsets.only(bottom: 4),
+                                              child: Text(
+                                                message.senderName,
+                                                style: const TextStyle(
+                                                  fontSize: 11.5,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: AppColors.primary,
+                                                ),
+                                              ),
+                                            ),
+                                          Text(
+                                            message.text,
+                                            style: TextStyle(
+                                              color: isMine
+                                                  ? Colors.white
+                                                  : AppColors.textDark,
+                                              fontSize: 13.6,
+                                              height: 1.38,
                                             ),
                                           ),
-                                        ),
-                                      Text(
-                                        message.text,
-                                        style: TextStyle(
-                                          color: isMine
-                                              ? Colors.white
-                                              : AppColors.textDark,
-                                          fontSize: 13.5,
-                                          height: 1.35,
-                                        ),
+                                          const SizedBox(height: 8),
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                isMine
+                                                    ? Icons.done_all_rounded
+                                                    : Icons.schedule_rounded,
+                                                size: 12,
+                                                color: isMine
+                                                    ? Colors.white.withValues(
+                                                        alpha: 0.76,
+                                                      )
+                                                    : AppColors.textGray,
+                                              ),
+                                              const SizedBox(width: 5),
+                                              Text(
+                                                _timeLabel(message.createdAt),
+                                                style: TextStyle(
+                                                  fontSize: 10.6,
+                                                  color: isMine
+                                                      ? Colors.white.withValues(
+                                                          alpha: 0.78,
+                                                        )
+                                                      : AppColors.textGray,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
                                       ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        _timeLabel(message.createdAt),
-                                        style: TextStyle(
-                                          fontSize: 10.5,
-                                          color: isMine
-                                              ? Colors.white.withValues(
-                                                  alpha: 0.78,
-                                                )
-                                              : AppColors.textGray,
-                                        ),
-                                      ),
-                                    ],
+                                    ),
                                   ),
-                                ),
-                              );
-                            },
+                                );
+                              },
+                            ),
                           );
                         },
                       ),
@@ -280,10 +338,10 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_isSupportChat) {
       return Container(
         margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(24),
           border: Border.all(color: const Color(0xFFE2E8F0)),
         ),
         child: Row(
@@ -333,10 +391,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Row(
@@ -398,7 +456,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
         decoration: BoxDecoration(
           color: Colors.white,
           boxShadow: [
@@ -412,31 +470,42 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Row(
           children: [
             Expanded(
-              child: TextField(
-                controller: _messageCtrl,
-                minLines: 1,
-                maxLines: 4,
-                decoration: InputDecoration(
-                  hintText: _isSupportChat
-                      ? 'Nhap noi dung can admin ho tro...'
-                      : 'Nhap noi dung can hoi nguoi ban...',
-                  filled: true,
-                  fillColor: const Color(0xFFF7FAFB),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(18),
-                    borderSide: BorderSide.none,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7FAFB),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: TextField(
+                  controller: _messageCtrl,
+                  minLines: 1,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    hintText: _isSupportChat
+                        ? 'Nhap noi dung can admin ho tro...'
+                        : 'Nhap noi dung can hoi nguoi ban...',
+                    hintStyle: const TextStyle(
+                      color: AppColors.textGray,
+                      fontSize: 13.2,
+                    ),
+                    filled: true,
+                    fillColor: Colors.transparent,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 13,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: BorderSide.none,
+                    ),
                   ),
                 ),
               ),
             ),
             const SizedBox(width: 10),
             SizedBox(
-              width: 52,
-              height: 52,
+              width: 54,
+              height: 54,
               child: ElevatedButton(
                 onPressed: _sending ? null : _sendMessage,
                 style: ElevatedButton.styleFrom(
@@ -444,7 +513,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(18),
                   ),
                 ),
                 child: _sending

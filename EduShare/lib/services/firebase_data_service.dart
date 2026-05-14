@@ -545,6 +545,8 @@ class FirebaseDataService {
     final user = _auth.currentUser;
     if (user == null || items.isEmpty) return const [];
     final profile = await ensureUserProfile(user);
+    final currentProducts = await _loadProductsForCheckout(items);
+    _ensureProductsInStock(items, currentProducts);
 
     final batch = _firestore.batch();
     final now = DateTime.now().toIso8601String();
@@ -581,6 +583,7 @@ class FirebaseDataService {
         'createdAt': now,
       });
     }
+    _queueStockUpdates(batch, items, currentProducts);
 
     try {
       await batch.commit();
@@ -596,6 +599,8 @@ class FirebaseDataService {
     if (user == null || items.isEmpty) return const [];
 
     final profile = await ensureUserProfile(user);
+    final currentProducts = await _loadProductsForCheckout(items);
+    _ensureProductsInStock(items, currentProducts);
     final totalAmount = items.fold<double>(
       0,
       (total, item) => total + item.totalPrice,
@@ -638,6 +643,7 @@ class FirebaseDataService {
         'createdAt': now,
       });
     }
+    _queueStockUpdates(batch, items, currentProducts);
 
     batch.set(_users.doc(user.uid), {
       'walletBalance': profile.walletBalance - totalAmount,
@@ -651,6 +657,68 @@ class FirebaseDataService {
     }
 
     return orderIds;
+  }
+
+  Future<Map<String, Product>> _loadProductsForCheckout(List<CartItem> items) async {
+    final products = <String, Product>{};
+    for (final item in items) {
+      final productId = item.product.id;
+      if (products.containsKey(productId)) continue;
+
+      final snapshot = await _products.doc(productId).get();
+      final freshProduct = snapshot.exists && snapshot.data() != null
+          ? _productFromSnapshot(snapshot)
+          : item.product;
+      products[productId] = freshProduct;
+    }
+    return products;
+  }
+
+  void _ensureProductsInStock(
+    List<CartItem> items,
+    Map<String, Product> currentProducts,
+  ) {
+    final requestedQuantities = <String, int>{};
+    for (final item in items) {
+      requestedQuantities.update(
+        item.product.id,
+        (current) => current + item.quantity,
+        ifAbsent: () => item.quantity,
+      );
+    }
+
+    for (final entry in requestedQuantities.entries) {
+      final product = currentProducts[entry.key];
+      final requestedQuantity = entry.value;
+      final availableQuantity = product?.stockQuantity ?? 0;
+      if (product == null || availableQuantity <= 0 || requestedQuantity > availableQuantity) {
+        throw StateError('out_of_stock');
+      }
+    }
+  }
+
+  void _queueStockUpdates(
+    WriteBatch batch,
+    List<CartItem> items,
+    Map<String, Product> currentProducts,
+  ) {
+    final requestedQuantities = <String, int>{};
+    for (final item in items) {
+      requestedQuantities.update(
+        item.product.id,
+        (current) => current + item.quantity,
+        ifAbsent: () => item.quantity,
+      );
+    }
+
+    for (final entry in requestedQuantities.entries) {
+      final product = currentProducts[entry.key];
+      if (product == null) continue;
+      final nextStock = product.stockQuantity - entry.value;
+      batch.set(_products.doc(entry.key), {
+        'stockQuantity': nextStock < 0 ? 0 : nextStock,
+      }, SetOptions(merge: true));
+    }
   }
 
   Future<bool> isFavorite(String productId) async {
@@ -1313,14 +1381,24 @@ class FirebaseDataService {
     required Map<String, dynamic> conversationData,
   }) async {
     final messagesRef = _conversations.doc(conversationId).collection('messages');
-    final latestSnapshot = await messagesRef
+    final recentSnapshot = await messagesRef
         .orderBy('createdAt', descending: true)
-        .limit(1)
+        .limit(25)
         .get();
-    final latestText = latestSnapshot.docs.isEmpty
+
+    final docs = recentSnapshot.docs;
+    final latestText = docs.isEmpty
         ? ''
-        : (latestSnapshot.docs.first.data()['text'] as String? ?? '').trim();
+        : (docs.first.data()['text'] as String? ?? '').trim();
     if (latestText == _supportAutoReplyText) return;
+
+    final hasManualAdminReply = docs.any((doc) {
+      final data = doc.data();
+      final senderUid = data['senderUid'] as String? ?? '';
+      final text = (data['text'] as String? ?? '').trim();
+      return senderUid == adminUid && text.isNotEmpty && text != _supportAutoReplyText;
+    });
+    if (hasManualAdminReply) return;
 
     var adminName = 'Admin EduShare';
     final participantNames = conversationData['participantNames'];
@@ -1473,3 +1551,4 @@ class FirebaseDataService {
     };
   }
 }
+

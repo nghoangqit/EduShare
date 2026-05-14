@@ -21,7 +21,7 @@ class DatabaseHelper {
     final path = join(dbPath, filePath);
     return openDatabase(
       path,
-      version: 3,
+      version: 4,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -47,7 +47,8 @@ class DatabaseHelper {
         condition TEXT DEFAULT 'Như mới',
         is_featured INTEGER DEFAULT 0,
         created_at TEXT NOT NULL,
-        seller_uid TEXT
+        seller_uid TEXT,
+        stock_quantity INTEGER DEFAULT 1
       )
     ''');
 
@@ -115,6 +116,15 @@ class DatabaseHelper {
     if (oldVersion < 3) {
       await _addColumnIfMissing(db, 'products', 'image_url', 'TEXT');
       await _addColumnIfMissing(db, 'products', 'seller_uid', 'TEXT');
+    }
+
+    if (oldVersion < 4) {
+      await _addColumnIfMissing(
+        db,
+        'products',
+        'stock_quantity',
+        'INTEGER DEFAULT 1',
+      );
     }
   }
 

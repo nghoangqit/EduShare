@@ -98,6 +98,7 @@ class _ProductCardState extends State<ProductCard> {
         if (product.discount > 0) _badge('-${product.discount}%', AppColors.red),
         if (product.isFree) _badge('Tang', AppColors.primary),
         if (product.isNew && product.discount == 0 && !product.isFree) _badge('Moi', AppColors.blue),
+        if (product.isOutOfStock) _badge('Het hang', AppColors.red),
         Positioned(
           top: 8,
           right: 8,
@@ -195,6 +196,17 @@ class _ProductCardState extends State<ProductCard> {
               ),
             ],
           ),
+          const SizedBox(height: 6),
+          Text(
+            product.isOutOfStock
+                ? 'Hang da het, cho nguoi ban bo sung'
+                : 'Con ${product.stockQuantity} san pham',
+            style: TextStyle(
+              fontSize: 10.5,
+              color: product.isOutOfStock ? AppColors.red : AppColors.textGray,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const Spacer(),
           if (product.isFree)
             const Text(
@@ -235,26 +247,38 @@ class _ProductCardState extends State<ProductCard> {
           width: double.infinity,
           height: 34,
           child: ElevatedButton(
-            onPressed: () async {
-              await cart.addItem(product);
+            onPressed: product.isOutOfStock
+                ? null
+                : () async {
+              final added = await cart.addItem(product);
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(inCart ? 'Da cap nhat gio hang.' : 'Da them vao gio hang.'),
-                    backgroundColor: AppColors.primary,
+                    content: Text(
+                      added
+                          ? (inCart ? 'Da cap nhat gio hang.' : 'Da them vao gio hang.')
+                          : 'San pham da het hoac da dat toi da so luong ton.',
+                    ),
+                    backgroundColor: added ? AppColors.primary : AppColors.red,
                     duration: const Duration(milliseconds: 900),
                   ),
                 );
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: inCart ? AppColors.primaryLight : AppColors.primary,
-              foregroundColor: inCart ? AppColors.primary : Colors.white,
+              backgroundColor: product.isOutOfStock
+                  ? const Color(0xFFE5E7EB)
+                  : (inCart ? AppColors.primaryLight : AppColors.primary),
+              foregroundColor: product.isOutOfStock
+                  ? AppColors.textGray
+                  : (inCart ? AppColors.primary : Colors.white),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               elevation: 0,
             ),
             child: Text(
-              inCart ? 'Da co trong gio' : 'Them vao gio',
+              product.isOutOfStock
+                  ? 'Het hang'
+                  : (inCart ? 'Da co trong gio' : 'Them vao gio'),
               style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
             ),
           ),
@@ -346,12 +370,31 @@ class _ProductDetailSheet extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.green.withValues(alpha: 0.1),
+                      color: product.isOutOfStock
+                          ? AppColors.red.withValues(alpha: 0.1)
+                          : Colors.green.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      'Tinh trang: ${product.condition}',
-                      style: const TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.w600),
+                      product.isOutOfStock
+                          ? 'Tinh trang: Het hang'
+                          : 'Tinh trang: ${product.condition}',
+                      style: TextStyle(
+                        color: product.isOutOfStock ? AppColors.red : Colors.green,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    product.isOutOfStock
+                        ? 'San pham tam het, khong the mua cho den khi nguoi ban bo sung them so luong.'
+                        : 'Con lai ${product.stockQuantity} san pham co the dat mua.',
+                    style: TextStyle(
+                      color: product.isOutOfStock ? AppColors.red : AppColors.textGray,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -449,18 +492,39 @@ class _ProductDetailSheet extends StatelessWidget {
                               ],
                               Expanded(
                                 child: ElevatedButton.icon(
-                                  onPressed: () async {
-                                    await cart.addItem(product);
+                                  onPressed: product.isOutOfStock
+                                      ? null
+                                      : () async {
+                                    final added = await cart.addItem(product);
+                                    if (context.mounted && !added) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                            'San pham da het hoac da dat toi da so luong ton.',
+                                          ),
+                                          backgroundColor: AppColors.red,
+                                        ),
+                                      );
+                                      return;
+                                    }
                                     if (context.mounted) Navigator.pop(context);
                                   },
                                   icon: const Icon(
                                     Icons.shopping_cart_outlined,
                                     size: 18,
                                   ),
-                                  label: const Text('Them vao gio'),
+                                  label: Text(
+                                    product.isOutOfStock
+                                        ? 'Het hang'
+                                        : 'Them vao gio',
+                                  ),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
-                                    foregroundColor: Colors.white,
+                                    backgroundColor: product.isOutOfStock
+                                        ? const Color(0xFFE5E7EB)
+                                        : AppColors.primary,
+                                    foregroundColor: product.isOutOfStock
+                                        ? AppColors.textGray
+                                        : Colors.white,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),

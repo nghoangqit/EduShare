@@ -385,6 +385,19 @@ class _CartScreenState extends State<CartScreen> {
                       color: AppColors.textGray,
                     ),
                   ),
+                  const SizedBox(height: 6),
+                  Text(
+                    item.product.isOutOfStock
+                        ? 'Hang da het, cho nguoi ban bo sung'
+                        : 'Ton kho con ${item.product.stockQuantity}',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: item.product.isOutOfStock
+                          ? AppColors.red
+                          : AppColors.textGray,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -428,10 +441,12 @@ class _CartScreenState extends State<CartScreen> {
                             children: [
                               _qtyButton(
                                 Icons.remove,
-                                () => cart.updateQuantity(
-                                  item.product.id,
-                                  item.quantity - 1,
-                                ),
+                                () async {
+                                  await cart.updateQuantity(
+                                    item.product.id,
+                                    item.quantity - 1,
+                                  );
+                                },
                               ),
                               Padding(
                                 padding: const EdgeInsets.symmetric(
@@ -448,10 +463,26 @@ class _CartScreenState extends State<CartScreen> {
                               ),
                               _qtyButton(
                                 Icons.add,
-                                () => cart.updateQuantity(
-                                  item.product.id,
-                                  item.quantity + 1,
-                                ),
+                                () async {
+                                  final updatedQuantity =
+                                      await cart.updateQuantity(
+                                        item.product.id,
+                                        item.quantity + 1,
+                                      );
+                                  if (!context.mounted) return;
+                                  if (updatedQuantity == item.quantity) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          item.product.isOutOfStock
+                                              ? 'San pham da het hang.'
+                                              : 'Ban chi co the mua toi da ${item.product.stockQuantity} san pham.',
+                                        ),
+                                        backgroundColor: AppColors.red,
+                                      ),
+                                    );
+                                  }
+                                },
                               ),
                             ],
                           ),
@@ -485,6 +516,9 @@ class _CartScreenState extends State<CartScreen> {
   Widget _buildCheckoutBar(CartProvider cart) {
     final hasFreeOnly = cart.items.every((i) => i.product.isFree);
     final totalPrice = cart.totalPrice;
+    final hasUnavailableItems = cart.items.any(
+      (item) => item.product.isOutOfStock || item.quantity > item.product.stockQuantity,
+    );
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
@@ -548,7 +582,9 @@ class _CartScreenState extends State<CartScreen> {
             width: double.infinity,
             height: 54,
             child: ElevatedButton(
-              onPressed: _processingOrder ? null : () => _checkout(cart),
+              onPressed: (_processingOrder || hasUnavailableItems)
+                  ? null
+                  : () => _checkout(cart),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primary,
                 foregroundColor: Colors.white,
@@ -567,7 +603,9 @@ class _CartScreenState extends State<CartScreen> {
                       ),
                     )
                   : Text(
-                      hasFreeOnly
+                      hasUnavailableItems
+                          ? 'Co san pham da het hang'
+                          : hasFreeOnly
                           ? 'Nhan hang mien phi'
                           : 'Thanh toan - ${Formatter.price(totalPrice)}',
                       style: const TextStyle(
@@ -583,6 +621,25 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> _checkout(CartProvider cart) async {
+    final blockedItems = cart.items.where(
+      (item) => item.product.isOutOfStock || item.quantity > item.product.stockQuantity,
+    );
+    if (blockedItems.isNotEmpty) {
+      final blockedTitles = blockedItems
+          .map((item) => item.product.title)
+          .toSet()
+          .join(', ');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Khong the thanh toan. San pham da het hoac khong du ton: $blockedTitles',
+          ),
+          backgroundColor: AppColors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => _processingOrder = true);
     final readyForDelivery = await _ensureShippingInfo();
     if (!mounted) return;
@@ -776,16 +833,29 @@ class _CartScreenState extends State<CartScreen> {
     required String paymentMethod,
   }) async {
     setState(() => _processingOrder = true);
-    await _dataService.createOrdersFromCart(
-      cart.items,
-      transferNotesBySeller: transferNotesBySeller,
-      status: status,
-      paymentMethod: paymentMethod,
-    );
-    await cart.clearCart();
-    if (!mounted) return;
-    setState(() => _processingOrder = false);
-    _showOrderSuccess();
+    try {
+      await _dataService.createOrdersFromCart(
+        cart.items,
+        transferNotesBySeller: transferNotesBySeller,
+        status: status,
+        paymentMethod: paymentMethod,
+      );
+      await cart.clearCart();
+      if (!mounted) return;
+      setState(() => _processingOrder = false);
+      _showOrderSuccess();
+    } on StateError {
+      if (!mounted) return;
+      setState(() => _processingOrder = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Khong the dat hang vi san pham da het hoac nguoi ban vua thay doi ton kho.',
+          ),
+          backgroundColor: AppColors.red,
+        ),
+      );
+    }
   }
 
   Future<void> _payWithWallet(CartProvider cart) async {
@@ -822,7 +892,7 @@ class _CartScreenState extends State<CartScreen> {
       setState(() => _processingOrder = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('So du vi da thay doi. Vui long thu lai.'),
+          content: Text('So du vi hoac ton kho da thay doi. Vui long thu lai.'),
           backgroundColor: AppColors.red,
         ),
       );
