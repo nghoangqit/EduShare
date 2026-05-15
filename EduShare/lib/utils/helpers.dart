@@ -1,22 +1,23 @@
 import 'dart:convert';
 import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 class Formatter {
   static String price(double price) {
-    if (price == 0) return '0đ';
+    if (price == 0) return '0 d';
     if (price >= 1000000) {
-      return '${(price / 1000000).toStringAsFixed(1)}Mđ';
+      return '${(price / 1000000).toStringAsFixed(1)}M d';
     }
     final formatted = price.toInt().toString().replaceAllMapped(
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (m) => '${m[1]}.',
+      (match) => '${match[1]}.',
     );
-    return '${formatted}đ';
+    return '$formatted d';
   }
 
   static String joinDate(DateTime date) {
-    return 'Tháng ${date.month}/${date.year}';
+    return 'Thang ${date.month}/${date.year}';
   }
 }
 
@@ -46,15 +47,15 @@ Color categoryColor(String type) {
 String typeLabel(String type) {
   switch (type) {
     case 'sach':
-      return 'Sách';
+      return 'Sach';
     case 'may_tinh':
-      return 'Thiết bị';
+      return 'Thiet bi';
     case 've':
-      return 'Vẽ';
+      return 'Ve';
     case 'dung_cu':
-      return 'Dụng cụ';
+      return 'Dung cu';
     default:
-      return 'Khác';
+      return 'Khac';
   }
 }
 
@@ -103,7 +104,7 @@ Widget buildProductImage({
     return Image.network(
       imageUrl,
       fit: fit,
-      errorBuilder: (_, __, ___) =>
+      errorBuilder: (context, error, stackTrace) =>
           Image.asset(imageForProductType(type), fit: fit),
     );
   }

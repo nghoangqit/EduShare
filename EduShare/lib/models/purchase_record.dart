@@ -19,6 +19,8 @@ class PurchaseRecord {
   final String recipientName;
   final String recipientPhone;
   final String shippingAddress;
+  final double? shippingLatitude;
+  final double? shippingLongitude;
   final double sellerPayoutAmount;
   final double platformFeeAmount;
   final bool payoutReleased;
@@ -47,6 +49,8 @@ class PurchaseRecord {
     required this.recipientName,
     required this.recipientPhone,
     required this.shippingAddress,
+    this.shippingLatitude,
+    this.shippingLongitude,
     required this.sellerPayoutAmount,
     required this.platformFeeAmount,
     required this.payoutReleased,
@@ -77,6 +81,8 @@ class PurchaseRecord {
       recipientName: map['recipientName'] as String? ?? '',
       recipientPhone: map['recipientPhone'] as String? ?? '',
       shippingAddress: map['shippingAddress'] as String? ?? '',
+      shippingLatitude: (map['shippingLatitude'] as num?)?.toDouble(),
+      shippingLongitude: (map['shippingLongitude'] as num?)?.toDouble(),
       sellerPayoutAmount: (map['sellerPayoutAmount'] as num?)?.toDouble() ?? 0,
       platformFeeAmount: (map['platformFeeAmount'] as num?)?.toDouble() ?? 0,
       payoutReleased: map['payoutReleased'] as bool? ?? false,
@@ -87,6 +93,9 @@ class PurchaseRecord {
       payoutReleasedAt: _parseFirestoreDate(map['payoutReleasedAt']),
     );
   }
+
+  bool get hasShippingLocation =>
+      shippingLatitude != null && shippingLongitude != null;
 
   static DateTime? _parseFirestoreDate(dynamic value) {
     if (value == null) return null;

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -10,6 +12,15 @@ import '../models/purchase_record.dart';
 import '../models/user_profile.dart';
 import '../models/wallet_request.dart';
 import '../utils/constants.dart';
+import 'support_bot_service.dart';
+
+enum FavoriteToggleResult {
+  success,
+  unauthenticated,
+  permissionDenied,
+  networkError,
+  timeout,
+}
 
 class FirebaseDataService {
   FirebaseDataService._();
@@ -58,10 +69,7 @@ class FirebaseDataService {
         return fallbackProfile;
       }
 
-      return UserProfile.fromMap({
-        'id': firebaseUser.uid,
-        ...snapshot.data()!,
-      });
+      return UserProfile.fromMap({'id': firebaseUser.uid, ...snapshot.data()!});
     } on FirebaseException catch (error) {
       if (error.code == 'permission-denied') {
         return fallbackProfile;
@@ -80,10 +88,7 @@ class FirebaseDataService {
     try {
       final snapshot = await _users.doc(userId).get();
       if (!snapshot.exists || snapshot.data() == null) return null;
-      return UserProfile.fromMap({
-        'id': userId,
-        ...snapshot.data()!,
-      });
+      return UserProfile.fromMap({'id': userId, ...snapshot.data()!});
     } on FirebaseException catch (error) {
       if (error.code == 'permission-denied') return null;
       rethrow;
@@ -145,7 +150,9 @@ class FirebaseDataService {
     if (user == null) return [];
 
     try {
-      final snapshot = await _walletRequests.where('userUid', isEqualTo: user.uid).get();
+      final snapshot = await _walletRequests
+          .where('userUid', isEqualTo: user.uid)
+          .get();
       final requests = snapshot.docs
           .map((doc) => WalletRequest.fromMap({'id': doc.id, ...doc.data()}))
           .toList();
@@ -281,7 +288,9 @@ class FirebaseDataService {
 
   Future<List<Product>> getAllProducts() async {
     try {
-      final snapshot = await _products.orderBy('createdAt', descending: true).get();
+      final snapshot = await _products
+          .orderBy('createdAt', descending: true)
+          .get();
       return snapshot.docs.map(_productFromDoc).toList();
     } on FirebaseException catch (error) {
       if (error.code == 'permission-denied') return [];
@@ -323,7 +332,11 @@ class FirebaseDataService {
     void addKeyword(String? value, int weight) {
       final normalized = _normalizeRecommendationText(value);
       if (normalized == null) return;
-      scores.update(normalized, (current) => current + weight, ifAbsent: () => weight);
+      scores.update(
+        normalized,
+        (current) => current + weight,
+        ifAbsent: () => weight,
+      );
     }
 
     final profile = await getCurrentUserProfile();
@@ -461,7 +474,9 @@ class FirebaseDataService {
 
   Future<List<Product>> getProductsBySeller(String sellerUid) async {
     try {
-      final snapshot = await _products.where('sellerUid', isEqualTo: sellerUid).get();
+      final snapshot = await _products
+          .where('sellerUid', isEqualTo: sellerUid)
+          .get();
       final products = snapshot.docs.map(_productFromDoc).toList();
       products.sort(
         (a, b) => (b.createdAt ?? DateTime(1970)).compareTo(
@@ -480,7 +495,9 @@ class FirebaseDataService {
     if (user == null) return [];
 
     try {
-      final snapshot = await _orders.where('buyerUid', isEqualTo: user.uid).get();
+      final snapshot = await _orders
+          .where('buyerUid', isEqualTo: user.uid)
+          .get();
       final records = snapshot.docs
           .map((doc) => PurchaseRecord.fromMap({'id': doc.id, ...doc.data()}))
           .toList();
@@ -499,16 +516,16 @@ class FirebaseDataService {
     }
   }
 
-  Future<List<PurchaseRecord>> getAllOrders({
-    List<String>? statuses,
-  }) async {
+  Future<List<PurchaseRecord>> getAllOrders({List<String>? statuses}) async {
     try {
       final snapshot = await _orders.get();
       var records = snapshot.docs
           .map((doc) => PurchaseRecord.fromMap({'id': doc.id, ...doc.data()}))
           .toList();
       if (statuses != null && statuses.isNotEmpty) {
-        records = records.where((order) => statuses.contains(order.status)).toList();
+        records = records
+            .where((order) => statuses.contains(order.status))
+            .toList();
       }
       records.sort((a, b) {
         final aWeight = _attentionWeight(a.status);
@@ -576,6 +593,8 @@ class FirebaseDataService {
         'recipientName': profile.name,
         'recipientPhone': profile.phone,
         'shippingAddress': profile.shippingAddress,
+        'shippingLatitude': profile.shippingLatitude,
+        'shippingLongitude': profile.shippingLongitude,
         'sellerPayoutAmount': sellerPayoutAmount,
         'platformFeeAmount': platformFeeAmount,
         'payoutReleased': false,
@@ -594,7 +613,9 @@ class FirebaseDataService {
     return orderIds;
   }
 
-  Future<List<String>> createWalletPaidOrdersFromCart(List<CartItem> items) async {
+  Future<List<String>> createWalletPaidOrdersFromCart(
+    List<CartItem> items,
+  ) async {
     final user = _auth.currentUser;
     if (user == null || items.isEmpty) return const [];
 
@@ -632,10 +653,13 @@ class FirebaseDataService {
         'totalPrice': item.totalPrice,
         'status': 'awaiting_shipment',
         'paymentMethod': 'wallet',
-        'transferNote': 'WALLET-${user.uid.substring(0, user.uid.length < 6 ? user.uid.length : 6).toUpperCase()}',
+        'transferNote':
+            'WALLET-${user.uid.substring(0, user.uid.length < 6 ? user.uid.length : 6).toUpperCase()}',
         'recipientName': profile.name,
         'recipientPhone': profile.phone,
         'shippingAddress': profile.shippingAddress,
+        'shippingLatitude': profile.shippingLatitude,
+        'shippingLongitude': profile.shippingLongitude,
         'sellerPayoutAmount': sellerPayoutAmount,
         'platformFeeAmount': platformFeeAmount,
         'payoutReleased': false,
@@ -659,7 +683,9 @@ class FirebaseDataService {
     return orderIds;
   }
 
-  Future<Map<String, Product>> _loadProductsForCheckout(List<CartItem> items) async {
+  Future<Map<String, Product>> _loadProductsForCheckout(
+    List<CartItem> items,
+  ) async {
     final products = <String, Product>{};
     for (final item in items) {
       final productId = item.product.id;
@@ -691,7 +717,9 @@ class FirebaseDataService {
       final product = currentProducts[entry.key];
       final requestedQuantity = entry.value;
       final availableQuantity = product?.stockQuantity ?? 0;
-      if (product == null || availableQuantity <= 0 || requestedQuantity > availableQuantity) {
+      if (product == null ||
+          availableQuantity <= 0 ||
+          requestedQuantity > availableQuantity) {
         throw StateError('out_of_stock');
       }
     }
@@ -726,35 +754,52 @@ class FirebaseDataService {
     if (user == null) return false;
 
     try {
-      final doc = await _favorites.doc('${user.uid}_$productId').get();
+      final doc = await _favorites
+          .doc('${user.uid}_$productId')
+          .get()
+          .timeout(const Duration(seconds: 4));
       return doc.exists;
+    } on TimeoutException {
+      return false;
     } on FirebaseException catch (error) {
       if (error.code == 'permission-denied') return false;
       rethrow;
     }
   }
 
-  Future<void> toggleFavorite(Product product) async {
+  Future<FavoriteToggleResult> toggleFavorite(Product product) async {
     final user = _auth.currentUser;
-    if (user == null) return;
+    if (user == null) return FavoriteToggleResult.unauthenticated;
 
     try {
       final docRef = _favorites.doc('${user.uid}_${product.id}');
-      final snapshot = await docRef.get();
+      final snapshot = await docRef.get().timeout(const Duration(seconds: 4));
 
       if (snapshot.exists) {
-        await docRef.delete();
-        return;
+        await docRef.delete().timeout(const Duration(seconds: 4));
+        return FavoriteToggleResult.success;
       }
 
-      await docRef.set({
-        'userUid': user.uid,
-        'productId': product.id,
-        'createdAt': DateTime.now().toIso8601String(),
-        'product': product.toFirestore(),
-      });
+      await docRef
+          .set({
+            'userUid': user.uid,
+            'productId': product.id,
+            'createdAt': DateTime.now().toIso8601String(),
+            'product': product.toFirestore(),
+          })
+          .timeout(const Duration(seconds: 4));
+      return FavoriteToggleResult.success;
+    } on TimeoutException {
+      return FavoriteToggleResult.timeout;
     } on FirebaseException catch (error) {
-      if (error.code != 'permission-denied') rethrow;
+      if (error.code == 'permission-denied') {
+        return FavoriteToggleResult.permissionDenied;
+      }
+      if (error.code == 'unavailable' ||
+          error.code == 'network-request-failed') {
+        return FavoriteToggleResult.networkError;
+      }
+      rethrow;
     }
   }
 
@@ -763,7 +808,9 @@ class FirebaseDataService {
     if (user == null) return [];
 
     try {
-      final snapshot = await _favorites.where('userUid', isEqualTo: user.uid).get();
+      final snapshot = await _favorites
+          .where('userUid', isEqualTo: user.uid)
+          .get();
       final docs = [...snapshot.docs]
         ..sort(
           (a, b) => (b.data()['createdAt'] ?? '').toString().compareTo(
@@ -1182,7 +1229,8 @@ class FirebaseDataService {
         .map((snapshot) {
           final conversations = snapshot.docs
               .map(
-                (doc) => ChatConversation.fromMap({'id': doc.id, ...doc.data()}),
+                (doc) =>
+                    ChatConversation.fromMap({'id': doc.id, ...doc.data()}),
               )
               .toList();
           conversations.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
@@ -1230,8 +1278,11 @@ class FirebaseDataService {
     );
 
     try {
-      final conversationSnapshot = await _conversations.doc(conversationId).get();
-      final conversationData = conversationSnapshot.data() ?? const <String, dynamic>{};
+      final conversationSnapshot = await _conversations
+          .doc(conversationId)
+          .get();
+      final conversationData =
+          conversationSnapshot.data() ?? const <String, dynamic>{};
       await messageRef.set(message.toFirestore());
       await _conversations.doc(conversationId).set({
         'lastMessage': normalizedText,
@@ -1261,11 +1312,12 @@ class FirebaseDataService {
       final senderIsAdmin =
           senderProfile.isAdmin ||
           AdminConfig.isAdminEmail(currentUser.email?.trim().toLowerCase());
-      if (productId == 'support_admin' && !senderIsAdmin && partnerUid.isNotEmpty) {
+      if (productId == 'support_admin' &&
+          !senderIsAdmin &&
+          partnerUid.isNotEmpty) {
         await _sendAutomaticSupportReply(
           conversationId: conversationId,
           adminUid: partnerUid,
-          conversationData: conversationData,
         );
       }
     } on FirebaseException catch (error) {
@@ -1284,6 +1336,7 @@ class FirebaseDataService {
         .snapshots()
         .map((snapshot) {
           final items = snapshot.docs
+              .where((doc) => doc.data()['isDeleted'] != true)
               .map(
                 (doc) => AppNotification.fromMap({'id': doc.id, ...doc.data()}),
               )
@@ -1300,6 +1353,68 @@ class FirebaseDataService {
       }, SetOptions(merge: true));
     } on FirebaseException catch (error) {
       if (error.code != 'permission-denied') rethrow;
+    }
+  }
+
+  Future<void> markAllNotificationsRead() async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return;
+
+    try {
+      final unreadNotifications = await _notifications
+          .where('userUid', isEqualTo: currentUser.uid)
+          .where('isRead', isEqualTo: false)
+          .get();
+      if (unreadNotifications.docs.isEmpty) return;
+
+      var batch = _firestore.batch();
+      var operationCount = 0;
+      for (final doc in unreadNotifications.docs) {
+        batch.set(doc.reference, {'isRead': true}, SetOptions(merge: true));
+        operationCount++;
+        if (operationCount == 450) {
+          await batch.commit();
+          batch = _firestore.batch();
+          operationCount = 0;
+        }
+      }
+      if (operationCount > 0) {
+        await batch.commit();
+      }
+    } on FirebaseException {
+      rethrow;
+    }
+  }
+
+  Future<void> deleteAllNotifications() async {
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) return;
+
+    try {
+      final userNotifications = await _notifications
+          .where('userUid', isEqualTo: currentUser.uid)
+          .get();
+      if (userNotifications.docs.isEmpty) return;
+
+      var batch = _firestore.batch();
+      var operationCount = 0;
+      for (final doc in userNotifications.docs) {
+        batch.set(doc.reference, {
+          'isDeleted': true,
+          'deletedAt': DateTime.now().toIso8601String(),
+        }, SetOptions(merge: true));
+        operationCount++;
+        if (operationCount == 450) {
+          await batch.commit();
+          batch = _firestore.batch();
+          operationCount = 0;
+        }
+      }
+      if (operationCount > 0) {
+        await batch.commit();
+      }
+    } on FirebaseException {
+      rethrow;
     }
   }
 
@@ -1378,9 +1493,10 @@ class FirebaseDataService {
   Future<void> _sendAutomaticSupportReply({
     required String conversationId,
     required String adminUid,
-    required Map<String, dynamic> conversationData,
   }) async {
-    final messagesRef = _conversations.doc(conversationId).collection('messages');
+    final messagesRef = _conversations
+        .doc(conversationId)
+        .collection('messages');
     final recentSnapshot = await messagesRef
         .orderBy('createdAt', descending: true)
         .limit(25)
@@ -1390,46 +1506,30 @@ class FirebaseDataService {
     final latestText = docs.isEmpty
         ? ''
         : (docs.first.data()['text'] as String? ?? '').trim();
-    if (latestText == _supportAutoReplyText) return;
-
-    final hasManualAdminReply = docs.any((doc) {
-      final data = doc.data();
-      final senderUid = data['senderUid'] as String? ?? '';
-      final text = (data['text'] as String? ?? '').trim();
-      return senderUid == adminUid && text.isNotEmpty && text != _supportAutoReplyText;
-    });
-    if (hasManualAdminReply) return;
-
-    var adminName = 'Admin EduShare';
-    final participantNames = conversationData['participantNames'];
-    if (participantNames is Map && participantNames[adminUid] != null) {
-      final rawName = participantNames[adminUid].toString().trim();
-      if (rawName.isNotEmpty) {
-        adminName = rawName;
-      }
-    }
+    if (latestText == _lastSupportBotText) return;
 
     final now = DateTime.now().add(const Duration(milliseconds: 250));
+    final botReply = const SupportBotService().replyFor(latestText);
     final autoReplyRef = messagesRef.doc();
     final autoReply = ChatMessage(
       id: autoReplyRef.id,
       conversationId: conversationId,
       senderUid: adminUid,
-      senderName: adminName,
-      text: _supportAutoReplyText,
+      senderName: 'EduShare AI',
+      text: botReply,
       createdAt: now,
     );
 
     await autoReplyRef.set(autoReply.toFirestore());
     await _conversations.doc(conversationId).set({
-      'lastMessage': _supportAutoReplyText,
+      'lastMessage': botReply,
       'lastSenderUid': adminUid,
       'updatedAt': now.toIso8601String(),
     }, SetOptions(merge: true));
   }
 
-  static const String _supportAutoReplyText =
-      'Cam on ban da nhan tin. Admin se som tra loi ban ngay thoi.';
+  static const String _lastSupportBotText =
+      'Mình là EduShare AI, có thể hỗ trợ nhanh về đơn hàng, thanh toán, ví EduShare, giao hàng, bản đồ, thông báo, tài khoản và đăng bán sản phẩm. Bạn mô tả vấn đề cụ thể hơn để mình hướng dẫn đúng hơn nhé.';
 
   Future<void> _notifyAdmins({
     required String title,
@@ -1455,7 +1555,8 @@ class FirebaseDataService {
           .where((doc) {
             final data = doc.data();
             final email = (data['email'] as String?)?.trim().toLowerCase();
-            final isAdmin = data['isAdmin'] as bool? ?? data['is_admin'] as bool? ?? false;
+            final isAdmin =
+                data['isAdmin'] as bool? ?? data['is_admin'] as bool? ?? false;
             return isAdmin || AdminConfig.isAdminEmail(email);
           })
           .map((doc) => doc.id)
@@ -1467,7 +1568,8 @@ class FirebaseDataService {
     }
   }
 
-  Future<List<ChatConversation>> _getCurrentUserConversationsForRecommendation() async {
+  Future<List<ChatConversation>>
+  _getCurrentUserConversationsForRecommendation() async {
     final currentUser = _auth.currentUser;
     if (currentUser == null) return const [];
 
@@ -1500,14 +1602,18 @@ class FirebaseDataService {
     final normalizedCategory = _normalizeRecommendationText(product.category);
     final normalizedAuthor = _normalizeRecommendationText(product.author);
     final normalizedTitle = _normalizeRecommendationText(product.title);
-    final normalizedUniversity = _normalizeRecommendationText(product.university);
+    final normalizedUniversity = _normalizeRecommendationText(
+      product.university,
+    );
     final normalizedType = _normalizeRecommendationText(product.type);
 
     if (favoriteIds.contains(product.id)) score += 100;
-    if (normalizedCategory != null && favoriteCategories.contains(normalizedCategory)) {
+    if (normalizedCategory != null &&
+        favoriteCategories.contains(normalizedCategory)) {
       score += 24;
     }
-    if (normalizedAuthor != null && favoriteAuthors.contains(normalizedAuthor)) {
+    if (normalizedAuthor != null &&
+        favoriteAuthors.contains(normalizedAuthor)) {
       score += 14;
     }
     if (normalizedTitle != null && purchasedTitles.contains(normalizedTitle)) {
@@ -1517,7 +1623,8 @@ class FirebaseDataService {
         purchasedUniversities.contains(normalizedUniversity)) {
       score += 18;
     }
-    if (profileUniversity != null && normalizedUniversity == profileUniversity) {
+    if (profileUniversity != null &&
+        normalizedUniversity == profileUniversity) {
       score += 20;
     }
     if (normalizedType != null && purchasedTypes.contains(normalizedType)) {
@@ -1551,4 +1658,3 @@ class FirebaseDataService {
     };
   }
 }
-

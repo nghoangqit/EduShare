@@ -53,7 +53,7 @@ class ProductCollectionScreen extends StatelessWidget {
             child: GridView.builder(
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
-                childAspectRatio: 0.62,
+                childAspectRatio: 0.56,
                 crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
               ),

@@ -5,11 +5,13 @@ import 'providers/auth_provider.dart';
 import 'providers/cart_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/post_auth_gate.dart';
+import 'services/notification_system_service.dart';
 import 'utils/constants.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  await NotificationSystemService.instance.initialize();
   runApp(const EduShareApp());
 }
 

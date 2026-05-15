@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/cart_provider.dart';
+import '../services/notification_system_service.dart';
 import '../utils/constants.dart';
 import 'add_product_screen.dart';
 import 'cart_screen.dart';
@@ -18,6 +19,18 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    NotificationSystemService.instance.startForCurrentUser();
+  }
+
+  @override
+  void dispose() {
+    NotificationSystemService.instance.stopForCurrentUser();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -146,7 +159,7 @@ class _AppShellState extends State<AppShell> {
       borderRadius: BorderRadius.circular(12),
       child: Center(
         child: Consumer<CartProvider>(
-          builder: (_, cart, __) {
+          builder: (context, cart, child) {
             final selected = _selectedIndex == 2;
             return AnimatedContainer(
               duration: const Duration(milliseconds: 200),
@@ -211,7 +224,9 @@ class _AppShellState extends State<AppShell> {
                       color: selected
                           ? AppColors.primary
                           : const Color(0xFF94A3B8),
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight: selected
+                          ? FontWeight.w600
+                          : FontWeight.normal,
                     ),
                   ),
                 ],

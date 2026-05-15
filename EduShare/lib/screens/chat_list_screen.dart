@@ -45,7 +45,7 @@ class ChatListScreen extends StatelessWidget {
                   slivers: [
                     SliverToBoxAdapter(child: _buildHeroHeader()),
                     SliverToBoxAdapter(child: _buildSearchStub()),
-                    SliverToBoxAdapter(child: _buildSupportShortcut()),
+                    SliverToBoxAdapter(child: _buildSupportShortcut(context)),
                     if (conversations.isEmpty)
                       SliverFillRemaining(
                         hasScrollBody: false,
@@ -55,25 +55,28 @@ class ChatListScreen extends StatelessWidget {
                       SliverPadding(
                         padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
                         sliver: SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              final conversation = conversations[index];
-                              final partnerName =
-                                  conversation.displayNameFor(currentUserId);
-                              return Padding(
-                                padding: EdgeInsets.only(
-                                  bottom: index == conversations.length - 1 ? 0 : 12,
-                                ),
-                                child: _conversationTile(
-                                  context,
-                                  currentUserId: currentUserId,
-                                  conversation: conversation,
-                                  partnerName: partnerName,
-                                ),
-                              );
-                            },
-                            childCount: conversations.length,
-                          ),
+                          delegate: SliverChildBuilderDelegate((
+                            context,
+                            index,
+                          ) {
+                            final conversation = conversations[index];
+                            final partnerName = conversation.displayNameFor(
+                              currentUserId,
+                            );
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                bottom: index == conversations.length - 1
+                                    ? 0
+                                    : 12,
+                              ),
+                              child: _conversationTile(
+                                context,
+                                currentUserId: currentUserId,
+                                conversation: conversation,
+                                partnerName: partnerName,
+                              ),
+                            );
+                          }, childCount: conversations.length),
                         ),
                       ),
                   ],
@@ -162,55 +165,81 @@ class ChatListScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSupportShortcut() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+  Widget _buildSupportShortcut(BuildContext context) {
+    return InkWell(
+      onTap: () => _openSupportChat(context),
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFFE2E8F0)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: AppColors.primaryLight,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(
+                Icons.smart_toy_outlined,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'EduShare AI Bot',
+                    style: TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Hoi nhanh ve don hang, vi, thanh toan, giao hang, thong bao va tai khoan.',
+                    style: TextStyle(
+                      fontSize: 12.3,
+                      color: AppColors.textGray,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.textGray),
+          ],
+        ),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              color: AppColors.primaryLight,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(
-              Icons.support_agent_rounded,
-              color: AppColors.primary,
-            ),
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Ho tro EduShare',
-                  style: TextStyle(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textDark,
-                  ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Can giai dap ve don hang, vi hoac tai khoan? Hoi admin ngay trong chat.',
-                  style: TextStyle(
-                    fontSize: 12.3,
-                    color: AppColors.textGray,
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+    );
+  }
+
+  Future<void> _openSupportChat(BuildContext context) async {
+    final conversationId = await _dataService.ensureAdminConversation(
+      topic: 'EduShare AI Bot',
+    );
+    if (!context.mounted || conversationId == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          conversationId: conversationId,
+          sellerUid: '',
+          sellerName: 'EduShare AI Bot',
+          productId: 'support_admin',
+          productTitle: 'EduShare AI Bot',
+          productType: 'dung_cu',
+        ),
       ),
     );
   }
@@ -252,11 +281,7 @@ class ChatListScreen extends StatelessWidget {
           child: const Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.forum_outlined,
-                size: 42,
-                color: AppColors.primary,
-              ),
+              Icon(Icons.forum_outlined, size: 42, color: AppColors.primary),
               SizedBox(height: 16),
               Text(
                 'Chua co doan chat nao',

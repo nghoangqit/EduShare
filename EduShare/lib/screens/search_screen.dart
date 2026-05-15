@@ -93,10 +93,10 @@ class _SearchScreenState extends State<SearchScreen> {
                 child: _loading
                     ? _buildLoadingState()
                     : !_searched
-                        ? _buildSuggestions()
-                        : _results.isEmpty
-                            ? _buildNoResult()
-                            : _buildResults(),
+                    ? _buildSuggestions()
+                    : _results.isEmpty
+                    ? _buildNoResult()
+                    : _buildResults(),
               ),
             ),
           ],
@@ -385,14 +385,14 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
           const SizedBox(height: 14),
           SizedBox(
-            height: 286,
+            height: 320,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _recommendedProducts.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              separatorBuilder: (context, index) => const SizedBox(width: 10),
               itemBuilder: (_, index) {
                 return SizedBox(
-                  width: 180,
+                  width: 186,
                   child: ProductCard(product: _recommendedProducts[index]),
                 );
               },
@@ -600,7 +600,7 @@ class _SearchScreenState extends State<SearchScreen> {
               padding: const EdgeInsets.only(bottom: 20),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
-                childAspectRatio: 0.62,
+                childAspectRatio: 0.56,
                 crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
               ),

@@ -23,8 +23,8 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
     _currentUser = _auth.currentUser;
     if (_currentUser != null) {
-      final profile = await _dataService.getCurrentUserProfile();
-      if (profile?.isBanned == true) {
+      final profile = await _dataService.ensureUserProfile(_currentUser!);
+      if (profile.isBanned) {
         await _auth.signOut();
         _currentUser = null;
         _errorMessage =
@@ -41,12 +41,12 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final credential = await _auth
-          .signInWithEmailAndPassword(
-            email: email.trim(),
-            password: password,
-          )
+          .signInWithEmailAndPassword(email: email.trim(), password: password)
           .timeout(const Duration(seconds: 15));
       _currentUser = credential.user;
+      if (_currentUser != null) {
+        await _dataService.ensureUserProfile(_currentUser!);
+      }
       final profile = await _dataService.getCurrentUserProfile();
       if (profile?.isBanned == true) {
         await _auth.signOut();
@@ -86,6 +86,9 @@ class AuthProvider extends ChangeNotifier {
           )
           .timeout(const Duration(seconds: 15));
       _currentUser = credential.user;
+      if (_currentUser != null) {
+        await _dataService.ensureUserProfile(_currentUser!);
+      }
       return _currentUser != null;
     } on FirebaseAuthException catch (error) {
       _currentUser = null;
@@ -127,12 +130,12 @@ class AuthProvider extends ChangeNotifier {
         password: currentPassword,
       );
 
-      await user.reauthenticateWithCredential(credential).timeout(
-        const Duration(seconds: 15),
-      );
-      await user.updatePassword(newPassword).timeout(
-        const Duration(seconds: 15),
-      );
+      await user
+          .reauthenticateWithCredential(credential)
+          .timeout(const Duration(seconds: 15));
+      await user
+          .updatePassword(newPassword)
+          .timeout(const Duration(seconds: 15));
       _currentUser = _auth.currentUser;
       return true;
     } on FirebaseAuthException catch (error) {

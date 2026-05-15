@@ -61,10 +61,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         .where((order) => order.status == 'delivered_pending_release')
         .toList();
     final pendingDeposits = _walletRequests
-        .where((request) => request.type == 'deposit' && request.status == 'pending')
+        .where(
+          (request) => request.type == 'deposit' && request.status == 'pending',
+        )
         .toList();
     final pendingWithdrawals = _walletRequests
-        .where((request) => request.type == 'withdrawal' && request.status == 'pending')
+        .where(
+          (request) =>
+              request.type == 'withdrawal' && request.status == 'pending',
+        )
         .toList();
 
     return Scaffold(
@@ -136,8 +141,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  _sectionTitle('Yeu cau nap tien vao vi')
-                  ,
+                  _sectionTitle('Yeu cau nap tien vao vi'),
                   if (pendingDeposits.isEmpty)
                     _emptyTile('Khong co yeu cau nap tien nao dang cho xu ly.')
                   else
@@ -164,7 +168,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             'Danh dau da chuyen ${Formatter.price(request.requestedAmount)}',
                         actionColor: AppColors.purple,
                         onTap: () => _runAdminAction(
-                          () => _dataService.completeWalletWithdrawal(request.id),
+                          () =>
+                              _dataService.completeWalletWithdrawal(request.id),
                         ),
                         showQr: true,
                       ),
@@ -373,10 +378,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           const SizedBox(height: 6),
           Text(
             'Don ${order.id} • ${order.productAuthor}',
-            style: const TextStyle(
-              fontSize: 12.5,
-              color: AppColors.textGray,
-            ),
+            style: const TextStyle(fontSize: 12.5, color: AppColors.textGray),
           ),
           const SizedBox(height: 10),
           Row(
@@ -405,30 +407,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             const SizedBox(height: 8),
             Text(
               'Noi dung CK: ${order.transferNote}',
-              style: const TextStyle(
-                fontSize: 12.5,
-                color: AppColors.textGray,
-              ),
+              style: const TextStyle(fontSize: 12.5, color: AppColors.textGray),
             ),
           ],
           if (order.recipientPhone.trim().isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(
               'Nguoi nhan: ${order.recipientName} - ${order.recipientPhone}',
-              style: const TextStyle(
-                fontSize: 12.5,
-                color: AppColors.textGray,
-              ),
+              style: const TextStyle(fontSize: 12.5, color: AppColors.textGray),
             ),
           ],
           if (order.shippingAddress.trim().isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(
               'Dia chi: ${order.shippingAddress}',
-              style: const TextStyle(
-                fontSize: 12.5,
-                color: AppColors.textGray,
-              ),
+              style: const TextStyle(fontSize: 12.5, color: AppColors.textGray),
             ),
           ],
           const SizedBox(height: 12),
@@ -463,7 +456,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ? AppColors.amber.withValues(alpha: 0.18)
                 : AppColors.primaryLight,
             child: Icon(
-              user.isAdmin ? Icons.admin_panel_settings_outlined : Icons.person_outline,
+              user.isAdmin
+                  ? Icons.admin_panel_settings_outlined
+                  : Icons.person_outline,
               color: user.isAdmin ? AppColors.amber : AppColors.primary,
             ),
           ),
@@ -582,10 +577,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           const SizedBox(height: 6),
           Text(
             '${product.author} • ${product.category}',
-            style: const TextStyle(
-              fontSize: 12.5,
-              color: AppColors.textGray,
-            ),
+            style: const TextStyle(fontSize: 12.5, color: AppColors.textGray),
           ),
           const SizedBox(height: 8),
           Text(
@@ -599,12 +591,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: _processing ? null : () => _confirmDeleteProduct(product),
+              onPressed: _processing
+                  ? null
+                  : () => _confirmDeleteProduct(product),
               icon: const Icon(Icons.delete_outline_rounded, size: 18),
               label: const Text('Xoa san pham'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.red,
-              ),
+              style: OutlinedButton.styleFrom(foregroundColor: AppColors.red),
             ),
           ),
         ],
@@ -684,21 +676,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ],
           if (showQr && qrUrl.isNotEmpty) ...[
             const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Image.network(
-                qrUrl,
-                height: 160,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => Container(
-                  height: 160,
-                  color: const Color(0xFFF8FAFC),
-                  alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.qr_code_2_rounded,
-                    size: 64,
-                    color: AppColors.primary,
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 240),
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.network(
+                        qrUrl,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Center(
+                              child: Icon(
+                                Icons.qr_code_2_rounded,
+                                size: 64,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -706,10 +709,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             const SizedBox(height: 10),
             Text(
               'QR hoan tien ve ${request.bankName} - ${request.bankAccountNumber}',
-              style: const TextStyle(
-                fontSize: 12.5,
-                color: AppColors.textGray,
-              ),
+              style: const TextStyle(fontSize: 12.5, color: AppColors.textGray),
             ),
           ],
           const SizedBox(height: 12),
@@ -752,10 +752,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
       ),
-      child: Text(
-        text,
-        style: const TextStyle(color: AppColors.textGray),
-      ),
+      child: Text(text, style: const TextStyle(color: AppColors.textGray)),
     );
   }
 
@@ -782,9 +779,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     await _load();
     if (!mounted) return;
     setState(() => _processing = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(successMessage)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(successMessage)));
   }
 
   Future<void> _confirmDeleteProduct(Product product) async {

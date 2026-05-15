@@ -20,6 +20,7 @@ class ProductCard extends StatefulWidget {
 class _ProductCardState extends State<ProductCard> {
   final FirebaseDataService _dataService = FirebaseDataService.instance;
   bool _favoriteLoading = true;
+  bool _favoriteUpdating = false;
   bool _isFavorite = false;
 
   Product get product => widget.product;
@@ -31,7 +32,14 @@ class _ProductCardState extends State<ProductCard> {
   }
 
   Future<void> _loadFavoriteStatus() async {
-    final isFavorite = await _dataService.isFavorite(product.id);
+    bool isFavorite = false;
+    try {
+      isFavorite = await _dataService
+          .isFavorite(product.id)
+          .timeout(const Duration(seconds: 4), onTimeout: () => false);
+    } catch (_) {
+      isFavorite = false;
+    }
     if (!mounted) return;
     setState(() {
       _isFavorite = isFavorite;
@@ -40,11 +48,37 @@ class _ProductCardState extends State<ProductCard> {
   }
 
   Future<void> _toggleFavorite() async {
-    await _dataService.toggleFavorite(product);
-    if (!mounted) return;
+    if (_favoriteUpdating) return;
+    final nextValue = !_isFavorite;
     setState(() {
-      _isFavorite = !_isFavorite;
+      _favoriteUpdating = true;
+      _isFavorite = nextValue;
     });
+
+    FavoriteToggleResult result;
+    try {
+      result = await _dataService.toggleFavorite(product);
+    } catch (_) {
+      result = FavoriteToggleResult.networkError;
+    }
+    if (!mounted) return;
+
+    if (result != FavoriteToggleResult.success) {
+      setState(() {
+        _favoriteUpdating = false;
+        _isFavorite = !nextValue;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_favoriteErrorMessage(result)),
+          backgroundColor: AppColors.red,
+          duration: const Duration(milliseconds: 1300),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _favoriteUpdating = false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(_isFavorite ? 'Da them vao yeu thich.' : 'Da xoa khoi yeu thich.'),
@@ -52,6 +86,21 @@ class _ProductCardState extends State<ProductCard> {
         duration: const Duration(milliseconds: 900),
       ),
     );
+  }
+
+  String _favoriteErrorMessage(FavoriteToggleResult result) {
+    switch (result) {
+      case FavoriteToggleResult.unauthenticated:
+        return 'Ban can dang nhap de dung yeu thich.';
+      case FavoriteToggleResult.permissionDenied:
+        return 'Firebase dang chan quyen ghi yeu thich.';
+      case FavoriteToggleResult.networkError:
+        return 'Khong ket noi on dinh voi Firebase. Thu lai sau.';
+      case FavoriteToggleResult.timeout:
+        return 'Firebase phan hoi qua lau. Thu lai sau.';
+      case FavoriteToggleResult.success:
+        return 'Da cap nhat yeu thich.';
+    }
   }
 
   @override
@@ -103,7 +152,7 @@ class _ProductCardState extends State<ProductCard> {
           top: 8,
           right: 8,
           child: GestureDetector(
-            onTap: _favoriteLoading ? null : _toggleFavorite,
+            onTap: (_favoriteLoading || _favoriteUpdating) ? null : _toggleFavorite,
             child: Container(
               width: 32,
               height: 32,
@@ -116,10 +165,14 @@ class _ProductCardState extends State<ProductCard> {
                       padding: EdgeInsets.all(8),
                       child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textGray),
                     )
-                  : Icon(
-                      _isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                      size: 18,
-                      color: _isFavorite ? AppColors.red : AppColors.textGray,
+                  : AnimatedScale(
+                      scale: _favoriteUpdating ? 0.92 : 1,
+                      duration: const Duration(milliseconds: 120),
+                      child: Icon(
+                        _isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                        size: 18,
+                        color: _isFavorite ? AppColors.red : AppColors.textGray,
+                      ),
                     ),
             ),
           ),

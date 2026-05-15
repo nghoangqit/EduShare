@@ -28,20 +28,65 @@ class _HomeScreenState extends State<HomeScreen> {
   List<String> _recommendedKeywords = [];
   UserProfile? _profile;
   bool _loading = true;
+  String? _loadError;
   String? _selectedCategory;
 
   static const List<Map<String, dynamic>> _categorySeeds = [
-    {'id': 'all', 'name': 'Tat ca', 'icon': Icons.grid_view_rounded, 'color': AppColors.primary},
-    {'id': 'Toán - Tin', 'name': 'Toan - Tin', 'icon': Icons.menu_book_rounded, 'color': AppColors.primary},
-    {'id': 'Văn học', 'name': 'Van hoc', 'icon': Icons.auto_stories_rounded, 'color': AppColors.blue},
-    {'id': 'Khoa học', 'name': 'Khoa hoc', 'icon': Icons.science_rounded, 'color': AppColors.amber},
-    {'id': 'Kinh tế', 'name': 'Kinh te', 'icon': Icons.insert_chart_outlined_rounded, 'color': AppColors.primaryDark},
-    {'id': 'Ngoại ngữ', 'name': 'Ngoai ngu', 'icon': Icons.language_rounded, 'color': AppColors.purple},
-    {'id': 'Vẽ - Mỹ thuật', 'name': 'Ve - My thuat', 'icon': Icons.palette_outlined, 'color': AppColors.amber},
-    {'id': 'Máy tính', 'name': 'May tinh', 'icon': Icons.calculate_rounded, 'color': AppColors.blue},
-    {'id': 'Dụng cụ', 'name': 'Dung cu', 'icon': Icons.content_cut_rounded, 'color': AppColors.purple},
+    {
+      'id': 'all',
+      'name': 'Tat ca',
+      'icon': Icons.grid_view_rounded,
+      'color': AppColors.primary,
+    },
+    {
+      'id': 'toan_tin',
+      'name': 'Toan - Tin',
+      'icon': Icons.menu_book_rounded,
+      'color': AppColors.primary,
+    },
+    {
+      'id': 'van_hoc',
+      'name': 'Van hoc',
+      'icon': Icons.auto_stories_rounded,
+      'color': AppColors.blue,
+    },
+    {
+      'id': 'khoa_hoc',
+      'name': 'Khoa hoc',
+      'icon': Icons.science_rounded,
+      'color': AppColors.amber,
+    },
+    {
+      'id': 'kinh_te',
+      'name': 'Kinh te',
+      'icon': Icons.insert_chart_outlined_rounded,
+      'color': AppColors.primaryDark,
+    },
+    {
+      'id': 'ngoai_ngu',
+      'name': 'Ngoai ngu',
+      'icon': Icons.language_rounded,
+      'color': AppColors.purple,
+    },
+    {
+      'id': 've_my_thuat',
+      'name': 'Ve - My thuat',
+      'icon': Icons.palette_outlined,
+      'color': AppColors.amber,
+    },
+    {
+      'id': 'may_tinh',
+      'name': 'May tinh',
+      'icon': Icons.calculate_rounded,
+      'color': AppColors.blue,
+    },
+    {
+      'id': 'dung_cu',
+      'name': 'Dung cu',
+      'icon': Icons.content_cut_rounded,
+      'color': AppColors.purple,
+    },
   ];
-
   @override
   void initState() {
     super.initState();
@@ -49,28 +94,53 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadData() async {
-    final all = await _dataService.getAllProducts();
-    final featured = await _dataService.getFeaturedProducts();
-    final recent = await _dataService.getRecentProducts();
-    final recommended = await _dataService.getRecommendedProducts(limit: 6);
-    final keywords = await _dataService.getRecommendedSearchKeywords(limit: 5);
-    final profile = await _dataService.getCurrentUserProfile();
-    if (!mounted) return;
-    setState(() {
-      _allProducts = all;
-      _featuredProducts = featured;
-      _recentProducts = recent;
-      _recommendedProducts = recommended;
-      _recommendedKeywords = keywords;
-      _profile = profile;
-      _loading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _loadError = null;
+      });
+    }
+
+    try {
+      final results = await Future.wait<dynamic>([
+        _dataService.getAllProducts(),
+        _dataService.getFeaturedProducts(),
+        _dataService.getRecentProducts(),
+        _dataService.getRecommendedProducts(limit: 6),
+        _dataService.getRecommendedSearchKeywords(limit: 5),
+        _dataService.getCurrentUserProfile(),
+      ]);
+
+      if (!mounted) return;
+      setState(() {
+        _allProducts = results[0] as List<Product>;
+        _featuredProducts = results[1] as List<Product>;
+        _recentProducts = results[2] as List<Product>;
+        _recommendedProducts = results[3] as List<Product>;
+        _recommendedKeywords = results[4] as List<String>;
+        _profile = results[5] as UserProfile?;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _loadError =
+            'Khong tai duoc du lieu trang chu luc nay. Vui long thu lai.';
+        _allProducts = [];
+        _featuredProducts = [];
+        _recentProducts = [];
+        _recommendedProducts = [];
+        _recommendedKeywords = [];
+      });
+    }
   }
 
   List<Category> get _categories {
     final counts = <String, int>{};
     for (final product in _allProducts) {
-      counts.update(product.category, (value) => value + 1, ifAbsent: () => 1);
+      final categoryId = _categoryIdFromName(product.category);
+      counts.update(categoryId, (value) => value + 1, ifAbsent: () => 1);
     }
 
     return _categorySeeds.map((seed) {
@@ -89,13 +159,112 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_selectedCategory == null || _selectedCategory == 'all') {
       return source;
     }
-    return source.where((product) => product.category == _selectedCategory).toList();
+    return source
+        .where(
+          (product) =>
+              _categoryIdFromName(product.category) == _selectedCategory,
+        )
+        .toList();
+  }
+
+  String _categoryIdFromName(String value) {
+    final normalized = _normalizeCategoryText(value);
+    return switch (normalized) {
+      'toan tin' => 'toan_tin',
+      'van hoc' => 'van_hoc',
+      'khoa hoc' => 'khoa_hoc',
+      'kinh te' => 'kinh_te',
+      'ngoai ngu' => 'ngoai_ngu',
+      've my thuat' => 've_my_thuat',
+      'may tinh' => 'may_tinh',
+      'dung cu' => 'dung_cu',
+      _ => normalized.replaceAll(' ', '_'),
+    };
+  }
+
+  String _normalizeCategoryText(String value) {
+    var text = value.trim().toLowerCase();
+    const replacements = {
+      'à': 'a',
+      'á': 'a',
+      'ạ': 'a',
+      'ả': 'a',
+      'ã': 'a',
+      'â': 'a',
+      'ầ': 'a',
+      'ấ': 'a',
+      'ậ': 'a',
+      'ẩ': 'a',
+      'ẫ': 'a',
+      'ă': 'a',
+      'ằ': 'a',
+      'ắ': 'a',
+      'ặ': 'a',
+      'ẳ': 'a',
+      'ẵ': 'a',
+      'è': 'e',
+      'é': 'e',
+      'ẹ': 'e',
+      'ẻ': 'e',
+      'ẽ': 'e',
+      'ê': 'e',
+      'ề': 'e',
+      'ế': 'e',
+      'ệ': 'e',
+      'ể': 'e',
+      'ễ': 'e',
+      'ì': 'i',
+      'í': 'i',
+      'ị': 'i',
+      'ỉ': 'i',
+      'ĩ': 'i',
+      'ò': 'o',
+      'ó': 'o',
+      'ọ': 'o',
+      'ỏ': 'o',
+      'õ': 'o',
+      'ô': 'o',
+      'ồ': 'o',
+      'ố': 'o',
+      'ộ': 'o',
+      'ổ': 'o',
+      'ỗ': 'o',
+      'ơ': 'o',
+      'ờ': 'o',
+      'ớ': 'o',
+      'ợ': 'o',
+      'ở': 'o',
+      'ỡ': 'o',
+      'ù': 'u',
+      'ú': 'u',
+      'ụ': 'u',
+      'ủ': 'u',
+      'ũ': 'u',
+      'ư': 'u',
+      'ừ': 'u',
+      'ứ': 'u',
+      'ự': 'u',
+      'ử': 'u',
+      'ữ': 'u',
+      'ỳ': 'y',
+      'ý': 'y',
+      'ỵ': 'y',
+      'ỷ': 'y',
+      'ỹ': 'y',
+      'đ': 'd',
+      '-': ' ',
+    };
+    for (final entry in replacements.entries) {
+      text = text.replaceAll(entry.key, entry.value);
+    }
+    return text.replaceAll(RegExp(r'\s+'), ' ').trim();
   }
 
   @override
   Widget build(BuildContext context) {
     final filteredFeatured = _filterProducts(_featuredProducts);
     final filteredRecent = _filterProducts(_recentProducts);
+    final filteredRecommended = _filterProducts(_recommendedProducts);
     final selectedCategoryId = _selectedCategory ?? 'all';
     final selectedCategory = _categories.firstWhere(
       (category) => category.id == selectedCategoryId,
@@ -106,28 +275,38 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: const Color(0xFFF3F6F8),
       body: SafeArea(
         child: _loading
-            ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+            ? const Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              )
+            : _loadError != null
+            ? _buildLoadErrorState()
             : RefreshIndicator(
                 onRefresh: _loadData,
                 color: AppColors.primary,
                 child: CustomScrollView(
-                  physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+                  physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
+                  ),
                   slivers: [
                     SliverToBoxAdapter(child: _buildHeroSection()),
                     SliverToBoxAdapter(child: _buildSearchBar()),
                     SliverToBoxAdapter(child: _buildPromoStrip()),
                     SliverToBoxAdapter(child: _buildCategories()),
-                    if (_recommendedProducts.isNotEmpty) ...[
+                    if (filteredRecommended.isNotEmpty) ...[
                       SliverToBoxAdapter(
                         child: _sectionHeader(
                           'Danh cho ban',
                           _recommendedSubtitle(),
                         ),
                       ),
-                      SliverToBoxAdapter(child: _productGrid(_recommendedProducts)),
+                      SliverToBoxAdapter(
+                        child: _productGrid(filteredRecommended),
+                      ),
                     ],
                     if (_selectedCategory != null && _selectedCategory != 'all')
-                      SliverToBoxAdapter(child: _buildFilterBanner(selectedCategory.name)),
+                      SliverToBoxAdapter(
+                        child: _buildFilterBanner(selectedCategory.name),
+                      ),
                     if (filteredFeatured.isNotEmpty) ...[
                       SliverToBoxAdapter(
                         child: _sectionHeader(
@@ -146,7 +325,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       SliverToBoxAdapter(child: _productGrid(filteredRecent)),
                     ],
-                    if (filteredFeatured.isEmpty && filteredRecent.isEmpty)
+                    if (filteredRecommended.isEmpty &&
+                        filteredFeatured.isEmpty &&
+                        filteredRecent.isEmpty)
                       SliverToBoxAdapter(child: _buildEmptyCategoryState()),
                     const SliverToBoxAdapter(child: SizedBox(height: 96)),
                   ],
@@ -156,8 +337,62 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildLoadErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 18,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.cloud_off_rounded,
+                size: 42,
+                color: AppColors.red,
+              ),
+              const SizedBox(height: 14),
+              Text(
+                _loadError ?? 'Khong tai duoc trang chu.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textDark,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _loadData,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Thu lai'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildHeroSection() {
-    final name = _profile?.name.trim().isNotEmpty == true ? _profile!.name : 'Ban';
+    final name = _profile?.name.trim().isNotEmpty == true
+        ? _profile!.name
+        : 'Ban';
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       decoration: BoxDecoration(
@@ -165,11 +400,7 @@ class _HomeScreenState extends State<HomeScreen> {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF061F2A),
-            Color(0xFF0D9488),
-            Color(0xFF6DD3C5),
-          ],
+          colors: [Color(0xFF061F2A), Color(0xFF0D9488), Color(0xFF6DD3C5)],
         ),
         boxShadow: [
           BoxShadow(
@@ -243,7 +474,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     GestureDetector(
                       onTap: () async {
                         await Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                          MaterialPageRoute(
+                            builder: (_) => const ProfileScreen(),
+                          ),
                         );
                         await _loadData();
                       },
@@ -253,7 +486,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: Colors.white.withValues(alpha: 0.7)),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
                         ),
                         clipBehavior: Clip.antiAlias,
                         child: _buildHeaderAvatar(),
@@ -327,7 +562,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   top: 6,
                   right: 6,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 2,
+                    ),
                     decoration: const BoxDecoration(
                       color: Color(0xFFFFD76A),
                       borderRadius: BorderRadius.all(Radius.circular(999)),
@@ -393,9 +631,9 @@ class _HomeScreenState extends State<HomeScreen> {
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
       child: GestureDetector(
         onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const SearchScreen()),
-          );
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const SearchScreen()));
         },
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -421,7 +659,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: AppColors.primaryLight,
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Icon(Icons.search_rounded, color: AppColors.primary),
+                    child: const Icon(
+                      Icons.search_rounded,
+                      color: AppColors.primary,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -430,27 +671,41 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         const Text(
                           'Tim kiem thong minh',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textDark),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textDark,
+                          ),
                         ),
                         const SizedBox(height: 3),
                         Text(
                           hintKeywords.isEmpty
                               ? 'Sach, may tinh, dung cu va nhieu hon nua'
-                              : 'Goi y: ${hintKeywords.join(' • ')}',
-                          style: const TextStyle(fontSize: 12.5, color: AppColors.textGray),
+                              : 'Goi y: ${hintKeywords.join(' â€¢ ')}',
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            color: AppColors.textGray,
+                          ),
                         ),
                       ],
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF1F8F7),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: const Row(
                       children: [
-                        Icon(Icons.auto_awesome_rounded, size: 16, color: AppColors.primary),
+                        Icon(
+                          Icons.auto_awesome_rounded,
+                          size: 16,
+                          color: AppColors.primary,
+                        ),
                         SizedBox(width: 6),
                         Text(
                           'Goi y',
@@ -515,10 +770,7 @@ class _HomeScreenState extends State<HomeScreen> {
           gradient: const LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFFFF8E8),
-              Color(0xFFF6FBF9),
-            ],
+            colors: [Color(0xFFFFF8E8), Color(0xFFF6FBF9)],
           ),
           border: Border.all(color: const Color(0xFFE8F0EE)),
         ),
@@ -530,22 +782,33 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   const Text(
                     'Goi y cho hoc ky moi',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textDark),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textDark,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   const Text(
                     'Kham pha cac mon do hoc tap noi bat va duoc dang moi de san sang cho ky hoc tiep theo.',
-                    style: TextStyle(fontSize: 13, color: AppColors.textGray, height: 1.4),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textGray,
+                      height: 1.4,
+                    ),
                   ),
                   const SizedBox(height: 14),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: const Text(
-                      'Giao dien moi • de nhin • de mua',
+                      'Giao dien moi â€¢ de nhin â€¢ de mua',
                       style: TextStyle(
                         color: AppColors.primary,
                         fontSize: 12,
@@ -594,12 +857,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     children: [
                       Text(
                         'Danh muc',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textDark),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textDark,
+                        ),
                       ),
                       SizedBox(height: 4),
                       Text(
                         'Lua chon nhanh theo nhom san pham ban can.',
-                        style: TextStyle(fontSize: 13, color: AppColors.textGray),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textGray,
+                        ),
                       ),
                     ],
                   ),
@@ -639,7 +909,9 @@ class _HomeScreenState extends State<HomeScreen> {
           color: isSelected ? Colors.white : const Color(0xFFF7FAFB),
           borderRadius: BorderRadius.circular(22),
           border: Border.all(
-            color: isSelected ? cat.color.withValues(alpha: 0.22) : const Color(0xFFE6ECEE),
+            color: isSelected
+                ? cat.color.withValues(alpha: 0.22)
+                : const Color(0xFFE6ECEE),
           ),
           boxShadow: isSelected
               ? [
@@ -667,9 +939,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ),
               ),
-              child: Center(
-                child: Icon(cat.icon, size: 24, color: cat.color),
-              ),
+              child: Center(child: Icon(cat.icon, size: 24, color: cat.color)),
             ),
             const SizedBox(height: 8),
             Text(
@@ -714,13 +984,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: AppColors.primaryLight,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.tune_rounded, color: AppColors.primary, size: 18),
+              child: const Icon(
+                Icons.tune_rounded,
+                color: AppColors.primary,
+                size: 18,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Dang loc theo "$categoryName" • $count san pham',
-                style: const TextStyle(color: AppColors.textDark, fontWeight: FontWeight.w700, fontSize: 12.5),
+                'Dang loc theo "$categoryName" â€¢ $count san pham',
+                style: const TextStyle(
+                  color: AppColors.textDark,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5,
+                ),
               ),
             ),
             TextButton(
@@ -741,12 +1019,20 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           Text(
             title,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textDark),
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textDark,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
             subtitle,
-            style: const TextStyle(fontSize: 13, color: AppColors.textGray, height: 1.4),
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textGray,
+              height: 1.4,
+            ),
           ),
         ],
       ),
@@ -780,17 +1066,28 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: const Column(
           children: [
-            Icon(Icons.inventory_2_outlined, size: 34, color: AppColors.textGray),
+            Icon(
+              Icons.inventory_2_outlined,
+              size: 34,
+              color: AppColors.textGray,
+            ),
             SizedBox(height: 12),
             Text(
               'Danh muc nay chua co san pham phu hop.',
-              style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textDark),
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: AppColors.textDark,
+              ),
             ),
             SizedBox(height: 6),
             Text(
               'Thu chuyen sang nhom khac hoac dang them san pham moi de lam noi dung phong phu hon.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textGray, fontSize: 12.5, height: 1.4),
+              style: TextStyle(
+                color: AppColors.textGray,
+                fontSize: 12.5,
+                height: 1.4,
+              ),
             ),
           ],
         ),
@@ -806,7 +1103,7 @@ class _HomeScreenState extends State<HomeScreen> {
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
-          childAspectRatio: 0.62,
+          childAspectRatio: 0.56,
           crossAxisSpacing: 10,
           mainAxisSpacing: 10,
         ),

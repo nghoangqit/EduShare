@@ -9,6 +9,8 @@ class UserProfile {
   String phone;
   String university;
   String shippingAddress;
+  double? shippingLatitude;
+  double? shippingLongitude;
   String avatarEmoji;
   String? avatarBase64;
   String bankName;
@@ -30,6 +32,8 @@ class UserProfile {
     required this.phone,
     required this.university,
     this.shippingAddress = '',
+    this.shippingLatitude,
+    this.shippingLongitude,
     this.avatarEmoji = 'avatar',
     this.avatarBase64,
     this.bankName = '',
@@ -56,6 +60,12 @@ class UserProfile {
           map['shipping_address'] as String? ??
           map['shippingAddress'] as String? ??
           '',
+      shippingLatitude:
+          (map['shipping_latitude'] as num?)?.toDouble() ??
+          (map['shippingLatitude'] as num?)?.toDouble(),
+      shippingLongitude:
+          (map['shipping_longitude'] as num?)?.toDouble() ??
+          (map['shippingLongitude'] as num?)?.toDouble(),
       avatarEmoji:
           map['avatar_emoji'] as String? ??
           map['avatarEmoji'] as String? ??
@@ -68,8 +78,7 @@ class UserProfile {
           map['momo_provider'] as String? ??
           map['momoProvider'] as String? ??
           '',
-      bankBin:
-          map['bank_bin'] as String? ?? map['bankBin'] as String? ?? '',
+      bankBin: map['bank_bin'] as String? ?? map['bankBin'] as String? ?? '',
       bankAccountNumber:
           map['bank_account_number'] as String? ??
           map['bankAccountNumber'] as String? ??
@@ -99,14 +108,9 @@ class UserProfile {
           map['is_admin'] as bool? ??
           map['isAdmin'] as bool? ??
           AdminConfig.isAdminEmail(map['email'] as String?),
-      isBanned:
-          map['is_banned'] as bool? ??
-          map['isBanned'] as bool? ??
-          false,
+      isBanned: map['is_banned'] as bool? ?? map['isBanned'] as bool? ?? false,
       joinDate:
-          _parseDate(
-            map['join_date'] ?? map['joinDate'] ?? DateTime.now(),
-          ) ??
+          _parseDate(map['join_date'] ?? map['joinDate'] ?? DateTime.now()) ??
           DateTime.now(),
     );
   }
@@ -119,6 +123,8 @@ class UserProfile {
       'phone': phone,
       'university': university,
       'shipping_address': shippingAddress,
+      'shipping_latitude': shippingLatitude,
+      'shipping_longitude': shippingLongitude,
       'avatar_emoji': avatarEmoji,
       'avatar_base64': avatarBase64,
       'bank_name': bankName,
@@ -145,6 +151,8 @@ class UserProfile {
       'phone': phone,
       'university': university,
       'shippingAddress': shippingAddress,
+      'shippingLatitude': shippingLatitude,
+      'shippingLongitude': shippingLongitude,
       'avatarEmoji': avatarEmoji,
       'avatarBase64': avatarBase64,
       'bankName': bankName,
@@ -175,6 +183,9 @@ class UserProfile {
 
   bool get hasCustomAvatar =>
       avatarBase64 != null && avatarBase64!.trim().isNotEmpty;
+
+  bool get hasShippingLocation =>
+      shippingLatitude != null && shippingLongitude != null;
 
   bool get hasBankAccount =>
       bankName.trim().isNotEmpty &&

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/cart_item.dart';
+import '../models/delivery_location.dart';
 import '../providers/cart_provider.dart';
 import '../services/firebase_data_service.dart';
 import '../utils/constants.dart';
 import '../utils/helpers.dart';
+import 'delivery_location_picker_screen.dart';
 
 class CartScreen extends StatefulWidget {
   final VoidCallback? onExploreProducts;
@@ -337,8 +339,9 @@ class _CartScreenState extends State<CartScreen> {
               child: SizedBox(
                 width: 84,
                 height: 84,
-                child: Image.asset(
-                  imageForProductType(item.product.type),
+                child: buildProductImage(
+                  type: item.product.type,
+                  imageUrl: item.product.imageUrl,
                   fit: BoxFit.cover,
                 ),
               ),
@@ -439,15 +442,12 @@ class _CartScreenState extends State<CartScreen> {
                           ),
                           child: Row(
                             children: [
-                              _qtyButton(
-                                Icons.remove,
-                                () async {
-                                  await cart.updateQuantity(
-                                    item.product.id,
-                                    item.quantity - 1,
-                                  );
-                                },
-                              ),
+                              _qtyButton(Icons.remove, () async {
+                                await cart.updateQuantity(
+                                  item.product.id,
+                                  item.quantity - 1,
+                                );
+                              }),
                               Padding(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 10,
@@ -461,29 +461,26 @@ class _CartScreenState extends State<CartScreen> {
                                   ),
                                 ),
                               ),
-                              _qtyButton(
-                                Icons.add,
-                                () async {
-                                  final updatedQuantity =
-                                      await cart.updateQuantity(
-                                        item.product.id,
-                                        item.quantity + 1,
-                                      );
-                                  if (!context.mounted) return;
-                                  if (updatedQuantity == item.quantity) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          item.product.isOutOfStock
-                                              ? 'San pham da het hang.'
-                                              : 'Ban chi co the mua toi da ${item.product.stockQuantity} san pham.',
-                                        ),
-                                        backgroundColor: AppColors.red,
-                                      ),
+                              _qtyButton(Icons.add, () async {
+                                final messenger = ScaffoldMessenger.of(context);
+                                final updatedQuantity = await cart
+                                    .updateQuantity(
+                                      item.product.id,
+                                      item.quantity + 1,
                                     );
-                                  }
-                                },
-                              ),
+                                if (updatedQuantity == item.quantity) {
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        item.product.isOutOfStock
+                                            ? 'San pham da het hang.'
+                                            : 'Ban chi co the mua toi da ${item.product.stockQuantity} san pham.',
+                                      ),
+                                      backgroundColor: AppColors.red,
+                                    ),
+                                  );
+                                }
+                              }),
                             ],
                           ),
                         ),
@@ -517,7 +514,9 @@ class _CartScreenState extends State<CartScreen> {
     final hasFreeOnly = cart.items.every((i) => i.product.isFree);
     final totalPrice = cart.totalPrice;
     final hasUnavailableItems = cart.items.any(
-      (item) => item.product.isOutOfStock || item.quantity > item.product.stockQuantity,
+      (item) =>
+          item.product.isOutOfStock ||
+          item.quantity > item.product.stockQuantity,
     );
 
     return Container(
@@ -622,7 +621,9 @@ class _CartScreenState extends State<CartScreen> {
 
   Future<void> _checkout(CartProvider cart) async {
     final blockedItems = cart.items.where(
-      (item) => item.product.isOutOfStock || item.quantity > item.product.stockQuantity,
+      (item) =>
+          item.product.isOutOfStock ||
+          item.quantity > item.product.stockQuantity,
     );
     if (blockedItems.isNotEmpty) {
       final blockedTitles = blockedItems
@@ -683,10 +684,17 @@ class _CartScreenState extends State<CartScreen> {
   Future<bool> _ensureShippingInfo() async {
     final profile = await _dataService.getCurrentUserProfile();
     if (profile == null) return false;
+    if (!mounted) return false;
 
     final nameCtrl = TextEditingController(text: profile.name);
     final phoneCtrl = TextEditingController(text: profile.phone);
     final addressCtrl = TextEditingController(text: profile.shippingAddress);
+    DeliveryLocation? selectedLocation = profile.hasShippingLocation
+        ? DeliveryLocation(
+            latitude: profile.shippingLatitude!,
+            longitude: profile.shippingLongitude!,
+          )
+        : null;
 
     final result = await showModalBottomSheet<bool>(
       context: context,
@@ -698,7 +706,8 @@ class _CartScreenState extends State<CartScreen> {
             final hasEnoughInfo =
                 nameCtrl.text.trim().isNotEmpty &&
                 phoneCtrl.text.trim().isNotEmpty &&
-                addressCtrl.text.trim().isNotEmpty;
+                addressCtrl.text.trim().isNotEmpty &&
+                selectedLocation != null;
 
             return Padding(
               padding: EdgeInsets.only(
@@ -754,6 +763,24 @@ class _CartScreenState extends State<CartScreen> {
                         maxLines: 3,
                         onChanged: (_) => setSheetState(() {}),
                       ),
+                      const SizedBox(height: 12),
+                      _deliveryLocationCard(
+                        selectedLocation: selectedLocation,
+                        onTap: () async {
+                          final location = await _pickDeliveryLocation(
+                            context,
+                            selectedLocation,
+                          );
+                          if (location == null) return;
+                          setSheetState(() {
+                            selectedLocation = location;
+                            final label = location.label?.trim();
+                            if (label != null && label.isNotEmpty) {
+                              addressCtrl.text = label;
+                            }
+                          });
+                        },
+                      ),
                       const SizedBox(height: 18),
                       SizedBox(
                         width: double.infinity,
@@ -764,8 +791,11 @@ class _CartScreenState extends State<CartScreen> {
                                   profile
                                     ..name = nameCtrl.text.trim()
                                     ..phone = phoneCtrl.text.trim()
-                                    ..shippingAddress =
-                                        addressCtrl.text.trim();
+                                    ..shippingAddress = addressCtrl.text.trim()
+                                    ..shippingLatitude =
+                                        selectedLocation?.latitude
+                                    ..shippingLongitude =
+                                        selectedLocation?.longitude;
                                   await _dataService.updateUserProfile(profile);
                                   if (!context.mounted) return;
                                   Navigator.pop(context, true);
@@ -793,6 +823,98 @@ class _CartScreenState extends State<CartScreen> {
     addressCtrl.dispose();
 
     return result ?? false;
+  }
+
+  Future<DeliveryLocation?> _pickDeliveryLocation(
+    BuildContext context,
+    DeliveryLocation? initialLocation,
+  ) {
+    return Navigator.of(context).push<DeliveryLocation>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) =>
+            DeliveryLocationPickerScreen(initialLocation: initialLocation),
+      ),
+    );
+  }
+
+  Widget _deliveryLocationCard({
+    required DeliveryLocation? selectedLocation,
+    required VoidCallback onTap,
+  }) {
+    final hasLocation = selectedLocation != null;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Ink(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: hasLocation
+              ? const Color(0xFFEFFDF8)
+              : const Color(0xFFFFFBEB),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: hasLocation
+                ? AppColors.primary.withValues(alpha: 0.22)
+                : AppColors.amber.withValues(alpha: 0.36),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: hasLocation
+                    ? AppColors.primary.withValues(alpha: 0.12)
+                    : AppColors.amber.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                hasLocation
+                    ? Icons.location_on_rounded
+                    : Icons.add_location_alt_outlined,
+                color: hasLocation ? AppColors.primary : AppColors.amber,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    hasLocation
+                        ? 'Vi tri giao hang da chon'
+                        : 'Chon vi tri tren ban do',
+                    style: const TextStyle(
+                      color: AppColors.textDark,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    hasLocation
+                        ? selectedLocation.displayText
+                        : 'Dinh vi hoac cham tren ban do de nguoi ban giao dung diem.',
+                    style: const TextStyle(
+                      color: AppColors.textGray,
+                      fontSize: 12.2,
+                      height: 1.35,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.textGray),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _shippingField({

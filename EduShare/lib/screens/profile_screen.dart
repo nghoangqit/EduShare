@@ -1290,6 +1290,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     return;
                                   }
 
+                                  final sheetNavigator = Navigator.of(
+                                    sheetContext,
+                                  );
+                                  final rootMessenger = ScaffoldMessenger.of(
+                                    this.context,
+                                  );
                                   final success = await context
                                       .read<AuthProvider>()
                                       .changePassword(
@@ -1300,10 +1306,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                                   if (!mounted) return;
                                   if (success) {
-                                    Navigator.pop(sheetContext);
-                                    ScaffoldMessenger.of(
-                                      this.context,
-                                    ).showSnackBar(
+                                    sheetNavigator.pop();
+                                    rootMessenger.showSnackBar(
                                       const SnackBar(
                                         content: Text(
                                           'Doi mat khau thanh cong.',
@@ -1691,13 +1695,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           return;
                         }
 
+                        final sheetNavigator = Navigator.of(sheetContext);
+                        final rootNavigator = Navigator.of(this.context);
+                        final rootMessenger = ScaffoldMessenger.of(
+                          this.context,
+                        );
                         final request = await _dataService.requestWalletDeposit(
                           amount,
                         );
                         if (!mounted) return;
-                        Navigator.pop(sheetContext);
+                        sheetNavigator.pop();
                         if (request == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
+                          rootMessenger.showSnackBar(
                             const SnackBar(
                               content: Text(
                                 'Khong the tao yeu cau nap tien luc nay.',
@@ -1708,8 +1717,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           return;
                         }
 
-                        await Navigator.push(
-                          context,
+                        await rootNavigator.push(
                           MaterialPageRoute(
                             builder: (_) =>
                                 _WalletTopupScreen(request: request),
@@ -1753,100 +1761,178 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ? profile.walletBalance.toStringAsFixed(0)
           : '',
     );
+    final quickAmounts = _withdrawQuickAmounts(profile.walletBalance);
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Rut tien tu vi',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'So du kha dung: ${Formatter.price(profile.walletBalance)}. Sau khi gui yeu cau, so tien nay se duoc tru khoi vi de cho admin xu ly.',
-                style: const TextStyle(
-                  fontSize: 12.5,
-                  color: AppColors.textGray,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 16),
-              _editField(
-                'So tien muon rut',
-                amountCtrl,
-                Icons.account_balance_wallet_outlined,
-                type: TextInputType.number,
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    final amount = _parseCurrencyInput(amountCtrl.text);
-                    if (amount <= 0 || amount > profile.walletBalance) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('So tien rut khong hop le.'),
-                          backgroundColor: AppColors.red,
-                        ),
-                      );
-                      return;
-                    }
+      builder: (sheetContext) {
+        double? selectedAmount = _parseCurrencyInput(amountCtrl.text);
 
-                    final request = await _dataService.requestWalletWithdrawal(
-                      amount,
-                    );
-                    if (!mounted) return;
-                    Navigator.pop(sheetContext);
-                    if (request == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Khong the tao yeu cau rut tien luc nay.',
-                          ),
-                          backgroundColor: AppColors.red,
-                        ),
-                      );
-                      return;
-                    }
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Da tao yeu cau rut ${Formatter.price(amount)}. Admin se xu ly som.',
-                        ),
-                      ),
-                    );
-                    _loadProfile();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                  ),
-                  child: const Text('Gui yeu cau rut tien'),
-                ),
+        return StatefulBuilder(
+          builder: (context, setSheetState) => Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
               ),
-            ],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Rut tien tu vi',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'So du kha dung: ${Formatter.price(profile.walletBalance)}. Chon nhanh so tien muon rut hoac nhap so khac.',
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: AppColors.textGray,
+                      height: 1.4,
+                    ),
+                  ),
+                  if (quickAmounts.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: quickAmounts.map((amount) {
+                        final isSelected = selectedAmount == amount;
+                        return ChoiceChip(
+                          label: Text(Formatter.price(amount)),
+                          selected: isSelected,
+                          onSelected: (_) {
+                            setSheetState(() {
+                              selectedAmount = amount;
+                              amountCtrl.text = amount.toStringAsFixed(0);
+                            });
+                          },
+                          selectedColor: AppColors.primaryLight,
+                          labelStyle: TextStyle(
+                            color: isSelected
+                                ? AppColors.primary
+                                : AppColors.textDark,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          side: BorderSide(
+                            color: isSelected
+                                ? AppColors.primary
+                                : const Color(0xFFE2E8F0),
+                          ),
+                          backgroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  _editField(
+                    'So tien muon rut',
+                    amountCtrl,
+                    Icons.account_balance_wallet_outlined,
+                    type: TextInputType.number,
+                    onChanged: (_) {
+                      setSheetState(() {
+                        selectedAmount = _parseCurrencyInput(amountCtrl.text);
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      'Sau khi gui yeu cau, ${Formatter.price(_parseCurrencyInput(amountCtrl.text))} se duoc tru khoi vi de admin xu ly.',
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: AppColors.textDark,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        final amount = _parseCurrencyInput(amountCtrl.text);
+                        if (amount <= 0 || amount > profile.walletBalance) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('So tien rut khong hop le.'),
+                              backgroundColor: AppColors.red,
+                            ),
+                          );
+                          return;
+                        }
+
+                        final sheetNavigator = Navigator.of(sheetContext);
+                        final rootMessenger = ScaffoldMessenger.of(context);
+                        final request = await _dataService
+                            .requestWalletWithdrawal(amount);
+                        if (!mounted) return;
+                        sheetNavigator.pop();
+                        if (request == null) {
+                          rootMessenger.showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Khong the tao yeu cau rut tien luc nay.',
+                              ),
+                              backgroundColor: AppColors.red,
+                            ),
+                          );
+                          return;
+                        }
+                        rootMessenger.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Da tao yeu cau rut ${Formatter.price(amount)}. Admin se xu ly som.',
+                            ),
+                          ),
+                        );
+                        _loadProfile();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                      ),
+                      child: const Text('Gui yeu cau rut tien'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     ).whenComplete(amountCtrl.dispose);
+  }
+
+  List<double> _withdrawQuickAmounts(double balance) {
+    if (balance <= 0) return const [];
+    final presets = <double>[50000, 100000, 200000, 500000, 1000000];
+    final amounts = presets.where((amount) => amount <= balance).toList();
+    final roundedBalance = balance.floorToDouble();
+    if (roundedBalance > 0 && !amounts.contains(roundedBalance)) {
+      amounts.add(roundedBalance);
+    }
+    amounts.sort();
+    return amounts;
   }
 
   double _parseCurrencyInput(String raw) {
@@ -2005,43 +2091,44 @@ class _WalletTopupScreen extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-                onPressed: () async {
-                  final admin = await _dataService.getPrimaryAdminProfile();
-                  if (!context.mounted) return;
-                  if (admin == null) {
+              onPressed: () async {
+                final admin = await _dataService.getPrimaryAdminProfile();
+                if (!context.mounted) return;
+                if (admin == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Chua tim thay admin de ho tro luc nay.'),
                       backgroundColor: AppColors.red,
                     ),
-                    );
-                    return;
-                  }
-                  if (_dataService.currentUserId == admin.id) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Ban dang su dung tai khoan admin.'),
-                        backgroundColor: AppColors.amber,
-                      ),
-                    );
-                    return;
-                  }
-
-                  final conversationId = await _dataService.ensureAdminConversation(
-                    topic: 'Ho tro nap tien vi EduShare',
                   );
-                  if (!context.mounted) return;
-                  if (conversationId == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Khong the khoi tao doan chat voi admin luc nay.',
-                        ),
-                        backgroundColor: AppColors.red,
-                      ),
+                  return;
+                }
+                if (_dataService.currentUserId == admin.id) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Ban dang su dung tai khoan admin.'),
+                      backgroundColor: AppColors.amber,
+                    ),
+                  );
+                  return;
+                }
+
+                final conversationId = await _dataService
+                    .ensureAdminConversation(
+                      topic: 'Ho tro nap tien vi EduShare',
                     );
-                    return;
-                  }
+                if (!context.mounted) return;
+                if (conversationId == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Khong the khoi tao doan chat voi admin luc nay.',
+                      ),
+                      backgroundColor: AppColors.red,
+                    ),
+                  );
+                  return;
+                }
 
                 await Navigator.of(context).push(
                   MaterialPageRoute(
@@ -2095,9 +2182,7 @@ class _WalletTopupScreen extends StatelessWidget {
                     final messenger = ScaffoldMessenger.of(context);
                     Navigator.pop(context);
                     messenger.showSnackBar(
-                      const SnackBar(
-                        content: Text('Da huy yeu cau nap tien.'),
-                      ),
+                      const SnackBar(content: Text('Da huy yeu cau nap tien.')),
                     );
                   },
                   style: OutlinedButton.styleFrom(

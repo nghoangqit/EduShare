@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import '../models/purchase_record.dart';
 import '../models/user_profile.dart';
 import '../services/firebase_data_service.dart';
@@ -175,6 +177,10 @@ class OrderDetailScreen extends StatelessWidget {
                       ? null
                       : order.shippingAddress,
                 ),
+                if (order.hasShippingLocation) ...[
+                  const SizedBox(height: 6),
+                  _deliveryMapPreview(order),
+                ],
               ],
             ),
           ),
@@ -475,6 +481,67 @@ class OrderDetailScreen extends StatelessWidget {
       const SnackBar(
         content: Text('Da sao chep thong tin.'),
         duration: Duration(milliseconds: 900),
+      ),
+    );
+  }
+
+  Widget _deliveryMapPreview(PurchaseRecord order) {
+    final point = LatLng(order.shippingLatitude!, order.shippingLongitude!);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: SizedBox(
+        height: 170,
+        child: Stack(
+          children: [
+            FlutterMap(
+              options: MapOptions(initialCenter: point, initialZoom: 16),
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.example.edu_share',
+                ),
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: point,
+                      width: 52,
+                      height: 52,
+                      child: const Icon(
+                        Icons.location_on_rounded,
+                        color: AppColors.red,
+                        size: 42,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            Positioned(
+              left: 10,
+              right: 10,
+              bottom: 10,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 9,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.94),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${order.shippingLatitude!.toStringAsFixed(6)}, ${order.shippingLongitude!.toStringAsFixed(6)}',
+                  style: const TextStyle(
+                    color: AppColors.textDark,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
