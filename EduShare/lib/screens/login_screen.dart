@@ -82,7 +82,10 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 18,
+                ),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 430),
                   child: Column(
@@ -158,7 +161,9 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 18),
               Text(
-                _isRegisterMode ? 'Bat dau ban hang tren EduShare' : 'Chao mung quay lai',
+                _isRegisterMode
+                    ? 'Bat dau ban hang tren EduShare'
+                    : 'Chao mung quay lai',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 28,
@@ -438,7 +443,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                _isRegisterMode ? 'Tao tai khoan' : 'Dang nhap ngay',
+                                _isRegisterMode
+                                    ? 'Tao tai khoan'
+                                    : 'Dang nhap ngay',
                                 style: const TextStyle(
                                   fontSize: 15.5,
                                   fontWeight: FontWeight.w700,
@@ -448,11 +455,68 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                   ),
                 ),
+                const SizedBox(height: 12),
+                _buildDividerLabel('hoac'),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: OutlinedButton.icon(
+                    onPressed: auth.loading ? null : _signInWithGoogle,
+                    icon: const Icon(Icons.g_mobiledata_rounded, size: 28),
+                    label: const Text(
+                      'Tiep tuc voi Google',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textDark,
+                      side: BorderSide(
+                        color: AppColors.primary.withValues(alpha: 0.22),
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDividerLabel(String label) {
+    return Row(
+      children: [
+        Expanded(
+          child: Divider(
+            height: 1,
+            color: AppColors.textGray.withValues(alpha: 0.2),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: AppColors.textGray.withValues(alpha: 0.82),
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Divider(
+            height: 1,
+            color: AppColors.textGray.withValues(alpha: 0.2),
+          ),
+        ),
+      ],
     );
   }
 
@@ -572,10 +636,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(
-            color: AppColors.primary,
-            width: 1.5,
-          ),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
       ),
     );
@@ -609,10 +670,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(18),
-          borderSide: const BorderSide(
-            color: AppColors.primary,
-            width: 1.5,
-          ),
+          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
       ),
     );
@@ -623,10 +681,7 @@ class _LoginScreenState extends State<LoginScreen> {
       child: Container(
         width: size,
         height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: color,
-        ),
+        decoration: BoxDecoration(shape: BoxShape.circle, color: color),
       ),
     );
   }
@@ -636,10 +691,7 @@ class _LoginScreenState extends State<LoginScreen> {
       child: Container(
         width: size,
         height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: color,
-        ),
+        decoration: BoxDecoration(shape: BoxShape.circle, color: color),
       ),
     );
   }
@@ -656,10 +708,32 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!success && mounted) {
       setState(() {
-        _errorText = auth.errorMessage ??
+        _errorText =
+            auth.errorMessage ??
             (_isRegisterMode
                 ? 'Dang ky that bai. Kiem tra Email/Password va thu lai.'
                 : 'Email hoac mat khau khong dung.');
+      });
+      return;
+    }
+
+    if (success && mounted) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const PostAuthGate()),
+      );
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    FocusScope.of(context).unfocus();
+    setState(() => _errorText = null);
+
+    final auth = context.read<AuthProvider>();
+    final success = await auth.signInWithGoogle();
+
+    if (!success && mounted) {
+      setState(() {
+        _errorText = auth.errorMessage ?? 'Dang nhap Google that bai.';
       });
       return;
     }
@@ -676,10 +750,7 @@ class _HeroChip extends StatelessWidget {
   final IconData icon;
   final String label;
 
-  const _HeroChip({
-    required this.icon,
-    required this.label,
-  });
+  const _HeroChip({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {

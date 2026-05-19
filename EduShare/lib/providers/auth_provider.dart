@@ -1,12 +1,16 @@
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import '../services/firebase_data_service.dart';
 
 class AuthProvider extends ChangeNotifier {
+  static Future<void>? _googleSignInInit;
+
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseDataService _dataService = FirebaseDataService.instance;
+  final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
 
   User? _currentUser;
   bool _loading = true;
@@ -67,6 +71,67 @@ class AuthProvider extends ChangeNotifier {
     } catch (_) {
       _currentUser = null;
       _errorMessage = 'Dang nhap that bai do loi ket noi Firebase.';
+      return false;
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> signInWithGoogle() async {
+    _loading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      await _ensureGoogleSignInInitialized();
+      if (!_googleSignIn.supportsAuthenticate()) {
+        _errorMessage = 'Thiet bi nay chua ho tro dang nhap Google.';
+        return false;
+      }
+
+      final googleUser = await _googleSignIn.authenticate().timeout(
+        const Duration(seconds: 30),
+      );
+      final googleAuth = googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
+
+      final userCredential = await _auth
+          .signInWithCredential(credential)
+          .timeout(const Duration(seconds: 20));
+      _currentUser = userCredential.user;
+      if (_currentUser != null) {
+        await _dataService.ensureUserProfile(_currentUser!);
+      }
+
+      final profile = await _dataService.getCurrentUserProfile();
+      if (profile?.isBanned == true) {
+        await _googleSignIn.signOut();
+        await _auth.signOut();
+        _currentUser = null;
+        _errorMessage =
+            'Tai khoan cua ban da bi khoa boi admin. Vui long lien he ho tro.';
+        return false;
+      }
+
+      return _currentUser != null;
+    } on GoogleSignInException catch (error) {
+      _currentUser = null;
+      _errorMessage = _mapGoogleSignInError(error);
+      return false;
+    } on FirebaseAuthException catch (error) {
+      _currentUser = null;
+      _errorMessage = _mapAuthError(error);
+      return false;
+    } on TimeoutException {
+      _currentUser = null;
+      _errorMessage = 'Google phan hoi qua lau. Kiem tra mang va thu lai.';
+      return false;
+    } catch (_) {
+      _currentUser = null;
+      _errorMessage = 'Dang nhap Google that bai. Vui long thu lai.';
       return false;
     } finally {
       _loading = false;
@@ -156,10 +221,16 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     _loading = true;
     notifyListeners();
+    await _ensureGoogleSignInInitialized();
+    await _googleSignIn.signOut();
     await _auth.signOut();
     _currentUser = null;
     _loading = false;
     notifyListeners();
+  }
+
+  Future<void> _ensureGoogleSignInInitialized() {
+    return _googleSignInInit ??= _googleSignIn.initialize();
   }
 
   String _mapAuthError(FirebaseAuthException error) {
@@ -182,9 +253,22 @@ class AuthProvider extends ChangeNotifier {
       case 'too-many-requests':
         return 'Ban thu qua nhieu lan. Vui long doi mot luc.';
       case 'operation-not-allowed':
-        return 'Email/Password login chua duoc bat trong Firebase Authentication.';
+        return 'Phuong thuc dang nhap nay chua duoc bat trong Firebase Authentication.';
       default:
         return error.message ?? 'Xac thuc Firebase that bai.';
+    }
+  }
+
+  String _mapGoogleSignInError(GoogleSignInException error) {
+    switch (error.code) {
+      case GoogleSignInExceptionCode.canceled:
+        return 'Ban da huy dang nhap Google.';
+      case GoogleSignInExceptionCode.interrupted:
+        return 'Dang nhap Google bi gian doan. Vui long thu lai.';
+      case GoogleSignInExceptionCode.uiUnavailable:
+        return 'Khong mo duoc man hinh dang nhap Google tren thiet bi nay.';
+      default:
+        return error.description ?? 'Dang nhap Google that bai.';
     }
   }
 }
