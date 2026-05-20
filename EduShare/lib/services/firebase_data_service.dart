@@ -1187,11 +1187,16 @@ class FirebaseDataService {
             'autoConfirmedAt': now,
             'paymentAutoConfirmed': true,
           },
-          if (bankTransactionId != null) 'bankTransactionId': bankTransactionId,
-          if (payosPaymentLinkId != null)
-            'payosPaymentLinkId': payosPaymentLinkId,
-          if (payosOrderCode != null) 'payosOrderCode': payosOrderCode,
-          if (payosStatus != null) 'payosStatus': payosStatus,
+          ...?(bankTransactionId == null
+              ? null
+              : {'bankTransactionId': bankTransactionId}),
+          ...?(payosPaymentLinkId == null
+              ? null
+              : {'payosPaymentLinkId': payosPaymentLinkId}),
+          ...?(payosOrderCode == null
+              ? null
+              : {'payosOrderCode': payosOrderCode}),
+          ...?(payosStatus == null ? null : {'payosStatus': payosStatus}),
         }, SetOptions(merge: true));
         transaction.set(_users.doc(userUid), {
           'walletBalance': FieldValue.increment(creditedAmount),

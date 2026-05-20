@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -2330,11 +2331,9 @@ class _WalletTopupScreenState extends State<_WalletTopupScreen> {
 
     if (confirmed) {
       _autoCheckTimer?.cancel();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Da nhan giao dich, tien da duoc cong vao vi.'),
-          backgroundColor: AppColors.primary,
-        ),
+      await _showPaymentSuccessEffect(
+        amount: request.creditedAmount,
+        paymentCode: request.payosOrderCode?.toString() ?? request.transferNote,
       );
       return;
     }
@@ -2401,5 +2400,325 @@ class _WalletTopupScreenState extends State<_WalletTopupScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _showPaymentSuccessEffect({
+    required double amount,
+    required String paymentCode,
+  }) {
+    return showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Thanh toan thanh cong',
+      barrierColor: Colors.black.withValues(alpha: 0.76),
+      transitionDuration: const Duration(milliseconds: 320),
+      pageBuilder: (_, _, _) => _WalletPaymentSuccessOverlay(
+        amount: amount,
+        paymentCode: paymentCode,
+      ),
+      transitionBuilder: (_, animation, _, child) {
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutBack,
+          reverseCurve: Curves.easeInCubic,
+        );
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(scale: curved, child: child),
+        );
+      },
+    );
+  }
+}
+
+class _WalletPaymentSuccessOverlay extends StatefulWidget {
+  final double amount;
+  final String paymentCode;
+
+  const _WalletPaymentSuccessOverlay({
+    required this.amount,
+    required this.paymentCode,
+  });
+
+  @override
+  State<_WalletPaymentSuccessOverlay> createState() =>
+      _WalletPaymentSuccessOverlayState();
+}
+
+class _WalletPaymentSuccessOverlayState
+    extends State<_WalletPaymentSuccessOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Material(
+        type: MaterialType.transparency,
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            final progress = Curves.easeOutCubic.transform(
+              _controller.value.clamp(0.0, 1.0).toDouble(),
+            );
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: 310,
+                  height: 310,
+                  child: CustomPaint(
+                    painter: _SuccessBurstPainter(progress: progress),
+                  ),
+                ),
+                Transform.scale(
+                  scale: 0.82 + (0.18 * Curves.elasticOut.transform(progress)),
+                  child: Container(
+                    width: 286,
+                    padding: const EdgeInsets.fromLTRB(22, 24, 22, 20),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF052F2B),
+                      borderRadius: BorderRadius.circular(26),
+                      border: Border.all(
+                        color: const Color(0xFF67E8F9).withValues(alpha: 0.42),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.42),
+                          blurRadius: 34,
+                          spreadRadius: 4,
+                          offset: const Offset(0, 18),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _SuccessCore(progress: progress),
+                        const SizedBox(height: 18),
+                        const Text(
+                          'Thanh toan thanh cong',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '+${Formatter.price(widget.amount)}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Color(0xFF99F6E4),
+                            fontSize: 27,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Vi EduShare da duoc nap tien.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.72),
+                            fontSize: 12.5,
+                            height: 1.35,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(
+                            'Ma GD: ${widget.paymentCode}',
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFFCCFBF1),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF2DD4BF),
+                              foregroundColor: const Color(0xFF042F2E),
+                              elevation: 0,
+                              minimumSize: const Size.fromHeight(48),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: const Text(
+                              'Tuyet, ve vi cua toi',
+                              style: TextStyle(fontWeight: FontWeight.w900),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _SuccessCore extends StatelessWidget {
+  final double progress;
+
+  const _SuccessCore({required this.progress});
+
+  @override
+  Widget build(BuildContext context) {
+    final ring = 82 + (34 * progress);
+    final ringOpacity = (1 - progress).clamp(0.0, 1.0).toDouble();
+    return SizedBox(
+      width: 126,
+      height: 126,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: ring,
+            height: ring,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: const Color(0xFF5EEAD4).withValues(
+                  alpha: ringOpacity,
+                ),
+                width: 3,
+              ),
+            ),
+          ),
+          Container(
+            width: 92,
+            height: 92,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                colors: [Color(0xFF2DD4BF), Color(0xFF22C55E)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF22C55E).withValues(alpha: 0.38),
+                  blurRadius: 28,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.bolt_rounded,
+              color: Colors.white,
+              size: 44,
+            ),
+          ),
+          Positioned(
+            right: 12,
+            bottom: 14,
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,
+                border: Border.all(color: const Color(0xFF052F2B), width: 3),
+              ),
+              child: const Icon(
+                Icons.check_rounded,
+                color: Color(0xFF16A34A),
+                size: 25,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SuccessBurstPainter extends CustomPainter {
+  final double progress;
+
+  const _SuccessBurstPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final paint = Paint()..strokeCap = StrokeCap.round;
+    final colors = [
+      const Color(0xFF2DD4BF),
+      const Color(0xFFF59E0B),
+      const Color(0xFF60A5FA),
+      const Color(0xFFA7F3D0),
+    ];
+
+    for (var i = 0; i < 28; i++) {
+      final angle = (math.pi * 2 / 28) * i;
+      final stagger = ((progress - (i % 7) * 0.035) / 0.86)
+          .clamp(0.0, 1.0)
+          .toDouble();
+      if (stagger <= 0) continue;
+
+      final distance = 54 + (112 * Curves.easeOutCubic.transform(stagger));
+      final start = center + Offset(math.cos(angle), math.sin(angle)) * distance;
+      final length = (8 + (i % 4) * 4).toDouble();
+      final end =
+          start + Offset(math.cos(angle), math.sin(angle)) * length * stagger;
+      paint
+        ..color = colors[i % colors.length].withValues(
+          alpha: (1 - stagger).clamp(0.16, 0.94).toDouble(),
+        )
+        ..strokeWidth = 2.4 + (i % 3);
+      canvas.drawLine(start, end, paint);
+    }
+
+    paint
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..color = const Color(0xFF99F6E4).withValues(
+        alpha: (1 - progress).clamp(0.0, 0.38).toDouble(),
+      );
+    canvas.drawCircle(center, 74 + progress * 82, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _SuccessBurstPainter oldDelegate) {
+    return oldDelegate.progress != progress;
   }
 }
