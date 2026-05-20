@@ -33,14 +33,32 @@ class AppStrings {
 class AdminConfig {
   static const List<String> adminEmails = ['admin@edushare.vn'];
 
-  static const String bankName = 'Viettinbank';
-  static const String bankBin = '970415';
+  static const String bankName = 'MB Bank';
+  static const String bankBin = '970422';
   static const String bankAccountNumber = '0388431406';
   static const String bankAccountHolder = 'Tran Ngoc Hoang';
   static const double walletTopupCreditRate = 0.90;
   static const double walletTopupFeeRate = 0.10;
   static const double sellerPayoutRate = 0.95;
   static const double platformFeeRate = 0.05;
+  static const String payosClientId = String.fromEnvironment(
+    'PAYOS_CLIENT_ID',
+  );
+  static const String payosApiKey = String.fromEnvironment('PAYOS_API_KEY');
+  static const String payosChecksumKey = String.fromEnvironment(
+    'PAYOS_CHECKSUM_KEY',
+  );
+  static const String payosPartnerCode = String.fromEnvironment(
+    'PAYOS_PARTNER_CODE',
+  );
+  static const String payosReturnUrl = String.fromEnvironment(
+    'PAYOS_RETURN_URL',
+    defaultValue: 'https://edushare.vn/payos/return',
+  );
+  static const String payosCancelUrl = String.fromEnvironment(
+    'PAYOS_CANCEL_URL',
+    defaultValue: 'https://edushare.vn/payos/cancel',
+  );
 
   static bool isAdminEmail(String? email) {
     final normalized = email?.trim().toLowerCase();

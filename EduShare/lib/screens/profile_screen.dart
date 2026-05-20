@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1612,7 +1613,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Chon nhanh so tien ban muon nap hoac nhap so khac. He thong se cong 90% vao vi EduShare sau khi admin xac nhan da nhan tien.',
+                    'Chon nhanh so tien ban muon nap hoac nhap so khac. He thong se tao ma PayOS va tu dong cong 90% vao vi sau khi thanh toan thanh cong.',
                     style: TextStyle(
                       fontSize: 12.5,
                       color: AppColors.textGray,
@@ -1969,20 +1970,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-class _WalletTopupScreen extends StatelessWidget {
+class _WalletTopupScreen extends StatefulWidget {
   final WalletRequest request;
-  static final FirebaseDataService _dataService = FirebaseDataService.instance;
 
   const _WalletTopupScreen({required this.request});
 
   @override
+  State<_WalletTopupScreen> createState() => _WalletTopupScreenState();
+}
+
+class _WalletTopupScreenState extends State<_WalletTopupScreen> {
+  final FirebaseDataService _dataService = FirebaseDataService.instance;
+  Timer? _autoCheckTimer;
+  bool _checkingBank = false;
+  bool _confirmed = false;
+
+  WalletRequest get request => widget.request;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkBankPayment());
+    _autoCheckTimer = Timer.periodic(
+      const Duration(seconds: 6),
+      (_) => _checkBankPayment(silent: true),
+    );
+  }
+
+  @override
+  void dispose() {
+    _autoCheckTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final qrUrl =
-        'https://img.vietqr.io/image/'
-        '${AdminConfig.bankBin}-${AdminConfig.bankAccountNumber}-compact2.png'
-        '?amount=${request.requestedAmount.round()}'
-        '&addInfo=${Uri.encodeComponent(request.transferNote)}'
-        '&accountName=${Uri.encodeComponent(AdminConfig.bankAccountHolder)}';
+    final hasPayosQr = request.payosQrCode.trim().isNotEmpty;
+    final hasPayosLink = request.payosCheckoutUrl.trim().isNotEmpty;
+    final qrUrl = hasPayosQr
+        ? 'https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${Uri.encodeComponent(request.payosQrCode)}'
+        : 'https://img.vietqr.io/image/'
+              '${AdminConfig.bankBin}-${AdminConfig.bankAccountNumber}-compact2.png'
+              '?amount=${request.requestedAmount.round()}'
+              '&addInfo=${Uri.encodeComponent(request.transferNote)}'
+              '&accountName=${Uri.encodeComponent(AdminConfig.bankAccountHolder)}';
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -2023,10 +2054,12 @@ class _WalletTopupScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 18),
-                const Text(
-                  'Quet QR de nap tien vao vi EduShare',
+                Text(
+                  hasPayosQr
+                      ? 'Quet QR PayOS de nap tien vao vi'
+                      : 'Quet QR de nap tien vao vi EduShare',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w800,
                     color: AppColors.textDark,
@@ -2034,12 +2067,65 @@ class _WalletTopupScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Sau khi admin xac nhan da nhan ${Formatter.price(request.requestedAmount)}, vi cua ban se duoc cong ${Formatter.price(request.creditedAmount)}.',
+                  hasPayosQr
+                      ? 'Sau khi PayOS bao thanh toan thanh cong, he thong se tu xac nhan va cong ${Formatter.price(request.creditedAmount)} vao vi.'
+                      : 'Sau khi chuyen dung so tien va noi dung giao dich, he thong se tu xac nhan va cong ${Formatter.price(request.creditedAmount)} vao vi.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 12.5,
                     color: AppColors.textGray,
                     height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: (_confirmed ? AppColors.primary : AppColors.amber)
+                        .withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      if (_checkingBank && !_confirmed)
+                        const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.amber,
+                          ),
+                        )
+                      else
+                        Icon(
+                          _confirmed
+                              ? Icons.verified_rounded
+                              : Icons.manage_search_rounded,
+                          size: 20,
+                          color: _confirmed
+                              ? AppColors.primary
+                              : AppColors.amber,
+                        ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _confirmed
+                              ? 'Da tim thay giao dich va cong tien vao vi.'
+                              : hasPayosQr
+                              ? 'Dang tu dong kiem tra trang thai PayOS...'
+                              : 'Dang tu dong doi soat giao dich ngan hang...',
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: _confirmed
+                                ? AppColors.primary
+                                : AppColors.textDark,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -2084,6 +2170,20 @@ class _WalletTopupScreen extends StatelessWidget {
                   'Tien vao vi',
                   Formatter.price(request.creditedAmount),
                 ),
+                if (hasPayosLink)
+                  _walletInfoRow(
+                    context,
+                    'Link PayOS',
+                    request.payosCheckoutUrl,
+                    copyValue: request.payosCheckoutUrl,
+                  ),
+                if (request.payosOrderCode != null)
+                  _walletInfoRow(
+                    context,
+                    'Ma PayOS',
+                    request.payosOrderCode.toString(),
+                    copyValue: request.payosOrderCode.toString(),
+                  ),
               ],
             ),
           ),
@@ -2196,24 +2296,18 @@ class _WalletTopupScreen extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: () {
-                    final messenger = ScaffoldMessenger.of(context);
-                    Navigator.pop(context);
-                    messenger.showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Yeu cau nap tien da duoc ghi nhan. Cho admin xac nhan giao dich.',
-                        ),
-                      ),
-                    );
-                  },
+                  onPressed: _checkingBank
+                      ? null
+                      : _confirmed
+                      ? () => Navigator.pop(context)
+                      : () => _checkBankPayment(silent: false),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     minimumSize: const Size.fromHeight(52),
                   ),
-                  child: const Text('Hoan tat'),
+                  child: Text(_confirmed ? 'Hoan tat' : 'Kiem tra giao dich'),
                 ),
               ),
             ],
@@ -2221,6 +2315,42 @@ class _WalletTopupScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _checkBankPayment({bool silent = false}) async {
+    if (_checkingBank || _confirmed) return;
+    setState(() => _checkingBank = true);
+    final confirmed = await _dataService
+        .autoConfirmWalletDepositFromBankTransaction(request.id);
+    if (!mounted) return;
+    setState(() {
+      _checkingBank = false;
+      _confirmed = confirmed;
+    });
+
+    if (confirmed) {
+      _autoCheckTimer?.cancel();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Da nhan giao dich, tien da duoc cong vao vi.'),
+          backgroundColor: AppColors.primary,
+        ),
+      );
+      return;
+    }
+
+    if (!silent) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            request.payosQrCode.trim().isNotEmpty
+                ? 'PayOS chua bao thanh toan thanh cong. He thong van tiep tuc tu kiem tra.'
+                : 'Chua tim thay giao dich khop so tien va noi dung. He thong van tiep tuc tu kiem tra.',
+          ),
+          backgroundColor: AppColors.amber,
+        ),
+      );
+    }
   }
 
   Widget _walletInfoRow(

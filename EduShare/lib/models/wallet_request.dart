@@ -15,6 +15,11 @@ class WalletRequest {
   final String bankAccountNumber;
   final String bankAccountHolder;
   final String note;
+  final int? payosOrderCode;
+  final String payosPaymentLinkId;
+  final String payosCheckoutUrl;
+  final String payosQrCode;
+  final String payosStatus;
   final DateTime createdAt;
   final DateTime? completedAt;
 
@@ -33,6 +38,11 @@ class WalletRequest {
     required this.bankAccountNumber,
     required this.bankAccountHolder,
     required this.note,
+    this.payosOrderCode,
+    this.payosPaymentLinkId = '',
+    this.payosCheckoutUrl = '',
+    this.payosQrCode = '',
+    this.payosStatus = '',
     required this.createdAt,
     this.completedAt,
   });
@@ -53,6 +63,11 @@ class WalletRequest {
       bankAccountNumber: map['bankAccountNumber'] as String? ?? '',
       bankAccountHolder: map['bankAccountHolder'] as String? ?? '',
       note: map['note'] as String? ?? '',
+      payosOrderCode: (map['payosOrderCode'] as num?)?.toInt(),
+      payosPaymentLinkId: map['payosPaymentLinkId'] as String? ?? '',
+      payosCheckoutUrl: map['payosCheckoutUrl'] as String? ?? '',
+      payosQrCode: map['payosQrCode'] as String? ?? '',
+      payosStatus: map['payosStatus'] as String? ?? '',
       createdAt: _parseDate(map['createdAt']) ?? DateTime.now(),
       completedAt: _parseDate(map['completedAt']),
     );

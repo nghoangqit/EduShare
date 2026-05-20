@@ -12,6 +12,7 @@ import '../models/purchase_record.dart';
 import '../models/user_profile.dart';
 import '../models/wallet_request.dart';
 import '../utils/constants.dart';
+import 'payos_service.dart';
 import 'support_bot_service.dart';
 
 enum FavoriteToggleResult {
@@ -44,6 +45,8 @@ class FirebaseDataService {
       _firestore.collection('notifications');
   CollectionReference<Map<String, dynamic>> get _walletRequests =>
       _firestore.collection('walletRequests');
+  CollectionReference<Map<String, dynamic>> get _bankTransactions =>
+      _firestore.collection('bankTransactions');
 
   String? get currentUserId => _auth.currentUser?.uid;
 
@@ -170,12 +173,14 @@ class FirebaseDataService {
 
     final profile = await ensureUserProfile(user);
     final requestRef = _walletRequests.doc();
+    final payosOrderCode = _buildPayosOrderCode();
     final note =
         'NAP-${user.uid.substring(0, user.uid.length < 6 ? user.uid.length : 6).toUpperCase()}-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
     final creditedAmount = requestedAmount * AdminConfig.walletTopupCreditRate;
+    final now = DateTime.now().toIso8601String();
 
     try {
-      await requestRef.set({
+      final initialData = {
         'userUid': user.uid,
         'userName': profile.name,
         'userEmail': profile.email,
@@ -189,8 +194,35 @@ class FirebaseDataService {
         'bankAccountNumber': '',
         'bankAccountHolder': '',
         'note': 'Nap ${requestedAmount.toStringAsFixed(0)}d vao vi EduShare',
-        'createdAt': DateTime.now().toIso8601String(),
-      });
+        'paymentProvider': 'payos',
+        'payosOrderCode': payosOrderCode,
+        'payosStatus': '',
+        'payosPaymentLinkId': '',
+        'payosCheckoutUrl': '',
+        'payosQrCode': '',
+        'createdAt': now,
+      };
+      await requestRef.set(initialData);
+
+      final payosLink = await PayosService.instance.createWalletTopupLink(
+        requestId: requestRef.id,
+        orderCode: payosOrderCode,
+        amount: requestedAmount.round(),
+        description: note,
+        buyerName: profile.name,
+        buyerEmail: profile.email,
+      );
+      final payosData = payosLink == null
+          ? const <String, dynamic>{'paymentProvider': 'bank_transfer'}
+          : <String, dynamic>{
+              'paymentProvider': 'payos',
+              'payosPaymentLinkId': payosLink.paymentLinkId,
+              'payosCheckoutUrl': payosLink.checkoutUrl,
+              'payosQrCode': payosLink.qrCode,
+              'payosStatus': payosLink.status,
+            };
+      await requestRef.set(payosData, SetOptions(merge: true));
+
       await _notifyAdmins(
         title: 'Co yeu cau nap tien moi',
         body:
@@ -199,25 +231,18 @@ class FirebaseDataService {
       );
       return WalletRequest.fromMap({
         'id': requestRef.id,
-        'userUid': user.uid,
-        'userName': profile.name,
-        'userEmail': profile.email,
-        'type': 'deposit',
-        'requestedAmount': requestedAmount,
-        'creditedAmount': creditedAmount,
-        'status': 'pending',
-        'transferNote': note,
-        'bankName': '',
-        'bankBin': '',
-        'bankAccountNumber': '',
-        'bankAccountHolder': '',
-        'note': 'Nap ${requestedAmount.toStringAsFixed(0)}d vao vi EduShare',
-        'createdAt': DateTime.now().toIso8601String(),
+        ...initialData,
+        ...payosData,
       });
     } on FirebaseException catch (error) {
       if (error.code == 'permission-denied') return null;
       rethrow;
     }
+  }
+
+  int _buildPayosOrderCode() {
+    final microseconds = DateTime.now().microsecondsSinceEpoch;
+    return microseconds % 9007199254740991;
   }
 
   Future<WalletRequest?> requestWalletWithdrawal(double amount) async {
@@ -948,6 +973,65 @@ class FirebaseDataService {
     );
   }
 
+  Future<bool> autoConfirmOrderPayment(String orderId) async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+
+    final snapshot = await _orders.doc(orderId).get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null) return false;
+    if ((data['status'] as String? ?? '') != 'pending_admin_confirmation') {
+      return false;
+    }
+
+    final buyerUid = data['buyerUid'] as String? ?? '';
+    if (buyerUid != user.uid && !AdminConfig.isAdminEmail(user.email)) {
+      return false;
+    }
+
+    try {
+      await _updateOrderWithNotification(
+        orderId: orderId,
+        updates: {
+          'status': 'awaiting_shipment',
+          'adminConfirmedAt': DateTime.now().toIso8601String(),
+          'autoConfirmedAt': DateTime.now().toIso8601String(),
+          'paymentAutoConfirmed': true,
+        },
+        notifyUserField: 'buyerUid',
+        title: 'Thanh toan da duoc tu dong xac nhan',
+        body:
+            'He thong da ghi nhan thanh toan cho don $orderId. Don hang dang cho nguoi ban giao.',
+        type: 'order_payment_confirmed',
+      );
+
+      final sellerUid = data['sellerUid'] as String? ?? '';
+      if (sellerUid.trim().isNotEmpty) {
+        await _createNotification(
+          userUid: sellerUid,
+          orderId: orderId,
+          title: 'Co don hang da thanh toan',
+          body:
+              'Don $orderId da duoc he thong xac nhan thanh toan va dang cho giao hang.',
+          type: 'order_payment_confirmed',
+        );
+      }
+      return true;
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') return false;
+      rethrow;
+    }
+  }
+
+  Future<int> autoConfirmOrderPayments(List<String> orderIds) async {
+    var confirmedCount = 0;
+    for (final orderId in orderIds) {
+      final confirmed = await autoConfirmOrderPayment(orderId);
+      if (confirmed) confirmedCount++;
+    }
+    return confirmedCount;
+  }
+
   Future<void> markOrderDelivered(String orderId) async {
     await _updateOrderWithNotification(
       orderId: orderId,
@@ -1007,39 +1091,191 @@ class FirebaseDataService {
   }
 
   Future<void> approveWalletDeposit(String requestId) async {
+    await _completeWalletDeposit(requestId, autoConfirmed: false);
+  }
+
+  Future<bool> autoConfirmWalletDepositFromBankTransaction(
+    String requestId,
+  ) async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+
     final snapshot = await _walletRequests.doc(requestId).get();
     final data = snapshot.data();
-    if (!snapshot.exists || data == null) return;
-    if ((data['status'] as String? ?? '') != 'pending') return;
+    if (!snapshot.exists || data == null) return false;
+    if ((data['userUid'] as String? ?? '') != user.uid &&
+        !AdminConfig.isAdminEmail(user.email)) {
+      return false;
+    }
 
-    final userUid = data['userUid'] as String? ?? '';
-    if (userUid.trim().isEmpty) return;
-    final creditedAmount = (data['creditedAmount'] as num?)?.toDouble() ?? 0;
-    final userProfile = await getUserProfileById(userUid);
-    final currentWallet = userProfile?.walletBalance ?? 0;
+    final payosConfirmed = await _autoConfirmWalletDepositFromPayos(
+      requestId,
+      data,
+    );
+    if (payosConfirmed) return true;
+
+    final transaction = await _findMatchingBankTransaction(data);
+    if (transaction == null) return false;
+
+    return _completeWalletDeposit(
+      requestId,
+      autoConfirmed: true,
+      bankTransactionId: transaction.id,
+    );
+  }
+
+  Future<bool> _autoConfirmWalletDepositFromPayos(
+    String requestId,
+    Map<String, dynamic> requestData,
+  ) async {
+    final payosId = (requestData['payosPaymentLinkId'] as String? ?? '').trim();
+    final payosOrderCode = requestData['payosOrderCode'];
+    final lookupId = payosId.isNotEmpty ? payosId : payosOrderCode?.toString();
+    if (lookupId == null || lookupId.trim().isEmpty) return false;
+
+    final payment = await PayosService.instance.getPaymentLink(lookupId);
+    if (payment == null) return false;
+
+    await _walletRequests.doc(requestId).set({
+      'payosStatus': payment.status,
+      'payosPaymentLinkId': payment.paymentLinkId,
+      'payosCheckoutUrl': payment.checkoutUrl,
+      'payosQrCode': payment.qrCode,
+      'payosLastCheckedAt': DateTime.now().toIso8601String(),
+    }, SetOptions(merge: true));
+
+    if (!payment.isPaid) return false;
+    return _completeWalletDeposit(
+      requestId,
+      autoConfirmed: true,
+      payosPaymentLinkId: payment.paymentLinkId,
+      payosOrderCode: payment.orderCode,
+      payosStatus: payment.status,
+    );
+  }
+
+  Future<bool> _completeWalletDeposit(
+    String requestId, {
+    required bool autoConfirmed,
+    String? bankTransactionId,
+    String? payosPaymentLinkId,
+    int? payosOrderCode,
+    String? payosStatus,
+  }) async {
+    final now = DateTime.now().toIso8601String();
+    String userUid = '';
+    double creditedAmount = 0;
 
     try {
-      final batch = _firestore.batch();
-      batch.set(_walletRequests.doc(requestId), {
-        'status': 'completed',
-        'completedAt': DateTime.now().toIso8601String(),
-      }, SetOptions(merge: true));
-      batch.set(_users.doc(userUid), {
-        'walletBalance': currentWallet + creditedAmount,
-      }, SetOptions(merge: true));
-      await batch.commit();
+      final completed = await _firestore.runTransaction<bool>((transaction) async {
+        final requestDoc = _walletRequests.doc(requestId);
+        final snapshot = await transaction.get(requestDoc);
+        final data = snapshot.data();
+        if (!snapshot.exists || data == null) return false;
+        if ((data['status'] as String? ?? '') != 'pending') return false;
+        if ((data['type'] as String? ?? '') != 'deposit') return false;
+
+        userUid = data['userUid'] as String? ?? '';
+        if (userUid.trim().isEmpty) return false;
+        creditedAmount = (data['creditedAmount'] as num?)?.toDouble() ?? 0;
+        if (creditedAmount <= 0) return false;
+
+        transaction.set(requestDoc, {
+          'status': 'completed',
+          'completedAt': now,
+          if (autoConfirmed) ...{
+            'autoConfirmedAt': now,
+            'paymentAutoConfirmed': true,
+          },
+          if (bankTransactionId != null) 'bankTransactionId': bankTransactionId,
+          if (payosPaymentLinkId != null)
+            'payosPaymentLinkId': payosPaymentLinkId,
+          if (payosOrderCode != null) 'payosOrderCode': payosOrderCode,
+          if (payosStatus != null) 'payosStatus': payosStatus,
+        }, SetOptions(merge: true));
+        transaction.set(_users.doc(userUid), {
+          'walletBalance': FieldValue.increment(creditedAmount),
+        }, SetOptions(merge: true));
+        if (bankTransactionId != null) {
+          transaction.set(_bankTransactions.doc(bankTransactionId), {
+            'used': true,
+            'matchedWalletRequestId': requestId,
+            'matchedUserUid': userUid,
+            'matchedAt': now,
+          }, SetOptions(merge: true));
+        }
+        return true;
+      });
+
+      if (!completed) return false;
 
       await _createNotification(
         userUid: userUid,
         orderId: '',
-        title: 'Nap tien da duoc xac nhan',
+        title: autoConfirmed
+            ? 'Nap tien da duoc tu dong xac nhan'
+            : 'Nap tien da duoc xac nhan',
         body:
-            'Admin da xac nhan nap tien. Vi EduShare cua ban duoc cong ${creditedAmount.toStringAsFixed(0)}d.',
+            '${autoConfirmed ? 'He thong' : 'Admin'} da xac nhan nap tien. Vi EduShare cua ban duoc cong ${creditedAmount.toStringAsFixed(0)}d.',
         type: 'wallet_deposit_completed',
       );
+      return true;
     } on FirebaseException catch (error) {
-      if (error.code != 'permission-denied') rethrow;
+      if (error.code == 'permission-denied') return false;
+      rethrow;
     }
+  }
+
+  Future<QueryDocumentSnapshot<Map<String, dynamic>>?>
+  _findMatchingBankTransaction(Map<String, dynamic> requestData) async {
+    final requestedAmount =
+        (requestData['requestedAmount'] as num?)?.toDouble() ?? 0;
+    final transferNote = (requestData['transferNote'] as String? ?? '')
+        .trim()
+        .toUpperCase();
+    final payosPaymentLinkId =
+        (requestData['payosPaymentLinkId'] as String? ?? '').trim();
+    final payosOrderCode = requestData['payosOrderCode']?.toString() ?? '';
+    if (requestedAmount <= 0 || transferNote.isEmpty) return null;
+
+    try {
+      final snapshot = await _bankTransactions
+          .where('used', isEqualTo: false)
+          .limit(80)
+          .get();
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final amount = (data['amount'] as num?)?.toDouble() ?? 0;
+        final content = _bankTransactionContent(data).toUpperCase();
+        final sameAmount = amount.round() == requestedAmount.round();
+        final samePayosLink =
+            payosPaymentLinkId.isNotEmpty &&
+            (data['paymentLinkId'] as String? ?? '') == payosPaymentLinkId;
+        final samePayosOrder =
+            payosOrderCode.isNotEmpty &&
+            data['orderCode']?.toString() == payosOrderCode;
+        if (sameAmount &&
+            (content.contains(transferNote) ||
+                samePayosLink ||
+                samePayosOrder)) {
+          return doc;
+        }
+      }
+      return null;
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') return null;
+      rethrow;
+    }
+  }
+
+  String _bankTransactionContent(Map<String, dynamic> data) {
+    return [
+      data['description'],
+      data['content'],
+      data['addInfo'],
+      data['note'],
+      data['transferNote'],
+    ].whereType<String>().join(' ');
   }
 
   Future<void> cancelWalletRequest(String requestId) async {
