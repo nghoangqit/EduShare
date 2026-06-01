@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/firebase_data_service.dart';
 import '../utils/constants.dart';
+import '../widgets/glass_surface.dart';
+import '../widgets/motion.dart';
 import 'post_auth_gate.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -54,54 +56,23 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F7F8),
       body: SafeArea(
-        child: Stack(
-          children: [
-            Positioned(
-              top: -120,
-              right: -80,
-              child: _bgOrb(
-                size: 260,
-                color: AppColors.primary.withValues(alpha: 0.14),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 430),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Reveal(child: _buildHero()),
+                  const SizedBox(height: 14),
+                  Reveal(delayMs: 80, child: _buildRecommendationStrip()),
+                  const SizedBox(height: 20),
+                  Reveal(delayMs: 140, child: _buildAuthCard(auth)),
+                ],
               ),
             ),
-            Positioned(
-              top: 100,
-              left: -90,
-              child: _bgOrb(
-                size: 210,
-                color: AppColors.blue.withValues(alpha: 0.10),
-              ),
-            ),
-            Positioned(
-              bottom: -70,
-              right: -50,
-              child: _bgOrb(
-                size: 200,
-                color: AppColors.amber.withValues(alpha: 0.08),
-              ),
-            ),
-            Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 18,
-                ),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 430),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildHero(),
-                      const SizedBox(height: 14),
-                      _buildRecommendationStrip(),
-                      const SizedBox(height: 20),
-                      _buildAuthCard(auth),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -116,12 +87,12 @@ class _LoginScreenState extends State<LoginScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(26),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.20),
-            blurRadius: 24,
-            offset: const Offset(0, 14),
+            color: AppColors.primary.withValues(alpha: 0.16),
+            blurRadius: 20,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
@@ -219,20 +190,9 @@ class _LoginScreenState extends State<LoginScreen> {
         ? fallbackKeywords
         : _recommendedKeywords;
 
-    return Container(
+    return SubtleGlassSurface(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFE5EEF0)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.035),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+      borderRadius: BorderRadius.circular(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -315,19 +275,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildAuthCard(AuthProvider auth) {
-    return Container(
+    return SubtleGlassSurface(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
+      borderRadius: BorderRadius.circular(22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -672,16 +622,6 @@ class _LoginScreenState extends State<LoginScreen> {
           borderRadius: BorderRadius.circular(18),
           borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
-      ),
-    );
-  }
-
-  Widget _bgOrb({required double size, required Color color}) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(shape: BoxShape.circle, color: color),
       ),
     );
   }

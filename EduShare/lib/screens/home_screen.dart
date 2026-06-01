@@ -6,6 +6,8 @@ import '../models/product.dart';
 import '../models/user_profile.dart';
 import '../services/firebase_data_service.dart';
 import '../utils/constants.dart';
+import '../widgets/glass_surface.dart';
+import '../widgets/motion.dart';
 import '../widgets/product_card.dart';
 import 'notification_center_screen.dart';
 import 'profile_screen.dart';
@@ -272,7 +274,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F6F8),
+      backgroundColor: AppColors.bg,
       body: SafeArea(
         child: _loading
             ? const Center(
@@ -288,10 +290,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     parent: AlwaysScrollableScrollPhysics(),
                   ),
                   slivers: [
-                    SliverToBoxAdapter(child: _buildHeroSection()),
-                    SliverToBoxAdapter(child: _buildSearchBar()),
-                    SliverToBoxAdapter(child: _buildPromoStrip()),
-                    SliverToBoxAdapter(child: _buildCategories()),
+                    SliverToBoxAdapter(
+                      child: Reveal(child: _buildHeroSection()),
+                    ),
+                    SliverToBoxAdapter(
+                      child: Reveal(delayMs: 60, child: _buildSearchBar()),
+                    ),
+                    SliverToBoxAdapter(
+                      child: Reveal(delayMs: 100, child: _buildPromoStrip()),
+                    ),
+                    SliverToBoxAdapter(
+                      child: Reveal(delayMs: 140, child: _buildCategories()),
+                    ),
                     if (filteredRecommended.isNotEmpty) ...[
                       SliverToBoxAdapter(
                         child: _sectionHeader(
@@ -396,137 +406,124 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(26),
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF061F2A), Color(0xFF0D9488), Color(0xFF6DD3C5)],
+          colors: [Color(0xFF083F3A), Color(0xFF0F766E), Color(0xFF2DD4BF)],
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0D9488).withValues(alpha: 0.24),
-            blurRadius: 28,
-            offset: const Offset(0, 18),
+            color: AppColors.primary.withValues(alpha: 0.18),
+            blurRadius: 22,
+            offset: const Offset(0, 14),
           ),
         ],
       ),
-      child: Stack(
-        children: [
-          Positioned(
-            top: -30,
-            right: -12,
-            child: Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.08),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: -45,
-            left: -18,
-            child: Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.06),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(22, 18, 22, 22),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'EduShare',
-                            style: TextStyle(
-                              color: Color(0xFFCFFFF8),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.2,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Xin chao, $name',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.w800,
-                              height: 1.1,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    _notificationButton(),
-                    const SizedBox(width: 10),
-                    GestureDetector(
-                      onTap: () async {
-                        await Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const ProfileScreen(),
-                          ),
-                        );
-                        await _loadData();
-                      },
-                      child: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.7),
-                          ),
-                        ),
-                        clipBehavior: Clip.antiAlias,
-                        child: _buildHeaderAvatar(),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                const Text(
-                  'Tim sach, may tinh va dung cu hoc tap da qua su dung voi giao dien mua sam gon gang va dang tin cay.',
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    color: Color(0xFFE0FFFB),
-                    height: 1.45,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(26),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.16),
                   ),
                 ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _heroChip(
-                        icon: Icons.workspace_premium_outlined,
-                        label: 'San pham duoc duyet ky',
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _heroChip(
-                        icon: Icons.eco_outlined,
-                        label: 'Tiet kiem va tai su dung',
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.fromLTRB(22, 18, 22, 22),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'EduShare',
+                              style: TextStyle(
+                                color: Color(0xFFCFFFF8),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Xin chao, $name',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 26,
+                                fontWeight: FontWeight.w800,
+                                height: 1.1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _notificationButton(),
+                      const SizedBox(width: 10),
+                      GestureDetector(
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const ProfileScreen(),
+                            ),
+                          );
+                          await _loadData();
+                        },
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.7),
+                            ),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: _buildHeaderAvatar(),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  const Text(
+                    'Tim sach, may tinh va dung cu hoc tap da qua su dung trong mot khong gian mua ban gon gang, dang tin cay.',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      color: Color(0xFFE0FFFB),
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _heroChip(
+                          icon: Icons.workspace_premium_outlined,
+                          label: 'San pham duoc duyet ky',
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _heroChip(
+                          icon: Icons.eco_outlined,
+                          label: 'Tiet kiem va tai su dung',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -635,19 +632,9 @@ class _HomeScreenState extends State<HomeScreen> {
             context,
           ).push(MaterialPageRoute(builder: (_) => const SearchScreen()));
         },
-        child: Container(
+        child: SubtleGlassSurface(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 18,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
+          borderRadius: BorderRadius.circular(20),
           child: Column(
             children: [
               Row(
@@ -681,7 +668,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         Text(
                           hintKeywords.isEmpty
                               ? 'Sach, may tinh, dung cu va nhieu hon nua'
-                              : 'Goi y: ${hintKeywords.join(' â€¢ ')}',
+                              : 'Goi y: ${hintKeywords.join(' - ')}',
                           style: const TextStyle(
                             fontSize: 12.5,
                             color: AppColors.textGray,
@@ -763,17 +750,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildPromoStrip() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-      child: Container(
+      child: GlassSurface(
         padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(28),
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFFFF8E8), Color(0xFFF6FBF9)],
-          ),
-          border: Border.all(color: const Color(0xFFE8F0EE)),
-        ),
+        borderRadius: BorderRadius.circular(22),
+        color: const Color(0xFFFFFBEB),
+        opacity: 0.72,
+        blur: 16,
+        borderColor: Colors.white.withValues(alpha: 0.72),
         child: Row(
           children: [
             Expanded(
@@ -790,7 +773,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    'Kham pha cac mon do hoc tap noi bat va duoc dang moi de san sang cho ky hoc tiep theo.',
+                    'Kham pha sach, thiet bi va do dung hoc tap noi bat de san sang cho ky hoc tiep theo.',
                     style: TextStyle(
                       fontSize: 13,
                       color: AppColors.textGray,
@@ -808,7 +791,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: const Text(
-                      'Giao dien moi â€¢ de nhin â€¢ de mua',
+                      'Giao dien moi - de nhin - de mua',
                       style: TextStyle(
                         color: AppColors.primary,
                         fontSize: 12,
@@ -883,7 +866,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 12),
           SizedBox(
-            height: 124,
+            height: 118,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -902,12 +885,12 @@ class _HomeScreenState extends State<HomeScreen> {
       onTap: () => setState(() => _selectedCategory = cat.id),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        width: 92,
+        width: 90,
         margin: const EdgeInsets.symmetric(horizontal: 5),
         padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
         decoration: BoxDecoration(
           color: isSelected ? Colors.white : const Color(0xFFF7FAFB),
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(
             color: isSelected
                 ? cat.color.withValues(alpha: 0.22)
@@ -929,15 +912,8 @@ class _HomeScreenState extends State<HomeScreen> {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    cat.color.withValues(alpha: isSelected ? 0.22 : 0.14),
-                    cat.color.withValues(alpha: isSelected ? 0.12 : 0.08),
-                  ],
-                ),
+                borderRadius: BorderRadius.circular(15),
+                color: cat.color.withValues(alpha: isSelected ? 0.16 : 0.10),
               ),
               child: Center(child: Icon(cat.icon, size: 24, color: cat.color)),
             ),
@@ -968,13 +944,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final count = _filterProducts(_allProducts).length;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-      child: Container(
+      child: SubtleGlassSurface(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.12)),
-        ),
+        borderRadius: BorderRadius.circular(20),
         child: Row(
           children: [
             Container(
@@ -993,7 +965,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Dang loc theo "$categoryName" â€¢ $count san pham',
+                'Dang loc theo "$categoryName" - $count san pham',
                 style: const TextStyle(
                   color: AppColors.textDark,
                   fontWeight: FontWeight.w700,
@@ -1050,20 +1022,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildEmptyCategoryState() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
-      child: Container(
+      child: SubtleGlassSurface(
         width: double.infinity,
         padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(26),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 14,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
+        borderRadius: BorderRadius.circular(22),
         child: const Column(
           children: [
             Icon(
@@ -1098,17 +1060,22 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _productGrid(List<Product> products) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          childAspectRatio: 0.56,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-        ),
-        itemCount: products.length,
-        itemBuilder: (_, i) => ProductCard(product: products[i]),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 720;
+          return GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: wide ? 3 : 2,
+              childAspectRatio: wide ? 0.68 : 0.58,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+            ),
+            itemCount: products.length,
+            itemBuilder: (_, i) => ProductCard(product: products[i]),
+          );
+        },
       ),
     );
   }

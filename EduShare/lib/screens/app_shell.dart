@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/cart_provider.dart';
 import '../services/notification_system_service.dart';
 import '../utils/constants.dart';
+import '../widgets/glass_surface.dart';
 import 'add_product_screen.dart';
 import 'cart_screen.dart';
 import 'home_screen.dart';
@@ -43,6 +44,7 @@ class _AppShellState extends State<AppShell> {
     ];
 
     return Scaffold(
+      backgroundColor: AppColors.bg,
       body: _buildAnimatedTabBody(screens),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
@@ -56,7 +58,8 @@ class _AppShellState extends State<AppShell> {
         },
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        elevation: 4,
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         child: const Icon(Icons.add_rounded, size: 28),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
@@ -115,42 +118,52 @@ class _AppShellState extends State<AppShell> {
   Widget _buildBottomNav() {
     return SafeArea(
       top: false,
-      child: SizedBox(
-        height: 78,
-        child: BottomAppBar(
-          shape: const CircularNotchedRectangle(),
-          notchMargin: 10,
-          color: Colors.white,
-          elevation: 12,
-          child: Row(
-            children: [
-              Expanded(
-                child: _navItem(
-                  index: 0,
-                  activeIcon: Icons.home_rounded,
-                  inactiveIcon: Icons.home_outlined,
-                  label: 'Trang chu',
-                ),
-              ),
-              Expanded(
-                child: _navItem(
-                  index: 1,
-                  activeIcon: Icons.search_rounded,
-                  inactiveIcon: Icons.search_outlined,
-                  label: 'Tim kiem',
-                ),
-              ),
-              const SizedBox(width: 64),
-              Expanded(child: _navCartItem()),
-              Expanded(
-                child: _navItem(
-                  index: 3,
-                  activeIcon: Icons.person_rounded,
-                  inactiveIcon: Icons.person_outline_rounded,
-                  label: 'Ho so',
-                ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+        child: SizedBox(
+          height: 74,
+          child: GlassSurface(
+            borderRadius: BorderRadius.circular(26),
+            opacity: 0.76,
+            blur: 20,
+            borderColor: Colors.white.withValues(alpha: 0.62),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.10),
+                blurRadius: 28,
+                offset: const Offset(0, 14),
               ),
             ],
+            child: Row(
+              children: [
+                Expanded(
+                  child: _navItem(
+                    index: 0,
+                    activeIcon: Icons.home_rounded,
+                    inactiveIcon: Icons.home_outlined,
+                    label: 'Trang chu',
+                  ),
+                ),
+                Expanded(
+                  child: _navItem(
+                    index: 1,
+                    activeIcon: Icons.search_rounded,
+                    inactiveIcon: Icons.search_outlined,
+                    label: 'Tim kiem',
+                  ),
+                ),
+                const SizedBox(width: 64),
+                Expanded(child: _navCartItem()),
+                Expanded(
+                  child: _navItem(
+                    index: 3,
+                    activeIcon: Icons.person_rounded,
+                    inactiveIcon: Icons.person_outline_rounded,
+                    label: 'Ho so',
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -169,16 +182,16 @@ class _AppShellState extends State<AppShell> {
       borderRadius: BorderRadius.circular(12),
       child: Center(
         child: AnimatedScale(
-          scale: selected ? 1.08 : 1,
+          scale: selected ? 1.04 : 1,
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutBack,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 220),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
             decoration: selected
                 ? BoxDecoration(
-                    color: AppColors.primaryLight,
-                    borderRadius: BorderRadius.circular(12),
+                    color: AppColors.primarySoft,
+                    borderRadius: BorderRadius.circular(16),
                   )
                 : null,
             child: Column(
@@ -188,17 +201,15 @@ class _AppShellState extends State<AppShell> {
                 Icon(
                   selected ? activeIcon : inactiveIcon,
                   size: 22,
-                  color: selected ? AppColors.primary : const Color(0xFF94A3B8),
+                  color: selected ? AppColors.primary : AppColors.textMuted,
                 ),
                 const SizedBox(height: 2),
                 Text(
                   label,
                   style: TextStyle(
                     fontSize: 10,
-                    color: selected
-                        ? AppColors.primary
-                        : const Color(0xFF94A3B8),
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                    color: selected ? AppColors.primary : AppColors.textMuted,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                   ),
                 ),
               ],
@@ -218,16 +229,19 @@ class _AppShellState extends State<AppShell> {
           builder: (context, cart, child) {
             final selected = _selectedIndex == 2;
             return AnimatedScale(
-              scale: selected ? 1.08 : 1,
+              scale: selected ? 1.04 : 1,
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOutBack,
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 220),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 11,
+                  vertical: 7,
+                ),
                 decoration: selected
                     ? BoxDecoration(
-                        color: AppColors.primaryLight,
-                        borderRadius: BorderRadius.circular(12),
+                        color: AppColors.primarySoft,
+                        borderRadius: BorderRadius.circular(16),
                       )
                     : null,
                 child: Column(
@@ -244,7 +258,7 @@ class _AppShellState extends State<AppShell> {
                           size: 22,
                           color: selected
                               ? AppColors.primary
-                              : const Color(0xFF94A3B8),
+                              : AppColors.textMuted,
                         ),
                         if (cart.totalCount > 0)
                           Positioned(
@@ -283,10 +297,10 @@ class _AppShellState extends State<AppShell> {
                         fontSize: 10,
                         color: selected
                             ? AppColors.primary
-                            : const Color(0xFF94A3B8),
+                            : AppColors.textMuted,
                         fontWeight: selected
-                            ? FontWeight.w600
-                            : FontWeight.normal,
+                            ? FontWeight.w800
+                            : FontWeight.w600,
                       ),
                     ),
                   ],

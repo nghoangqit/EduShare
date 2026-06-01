@@ -3,6 +3,8 @@ import '../models/product.dart';
 import '../services/firebase_data_service.dart';
 import '../utils/constants.dart';
 import '../utils/helpers.dart';
+import '../widgets/glass_surface.dart';
+import '../widgets/motion.dart';
 import '../widgets/product_card.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -86,7 +88,7 @@ class _SearchScreenState extends State<SearchScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(),
+            Reveal(child: _buildHeader()),
             Expanded(
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
@@ -110,7 +112,7 @@ class _SearchScreenState extends State<SearchScreen> {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFF0D9488), Color(0xFF14B8A6)],
+          colors: [Color(0xFF083F3A), Color(0xFF0F766E), Color(0xFF14B8A6)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -146,9 +148,9 @@ class _SearchScreenState extends State<SearchScreen> {
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.10),
-                  blurRadius: 18,
-                  offset: const Offset(0, 10),
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
@@ -225,144 +227,133 @@ class _SearchScreenState extends State<SearchScreen> {
       key: const ValueKey('suggestions'),
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
       children: [
-        Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 16,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFF7E8),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(
-                      Icons.auto_awesome_rounded,
-                      color: AppColors.amber,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Goi y tim kiem',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textDark,
-                          ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Chon nhanh mot tu khoa de bat dau',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            color: AppColors.textGray,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              if (_loadingSuggestions)
-                const LinearProgressIndicator(
-                  color: AppColors.primary,
-                  minHeight: 3,
-                )
-              else
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: suggestions.map((suggestion) {
-                    return InkWell(
-                      borderRadius: BorderRadius.circular(999),
-                      onTap: () {
-                        _ctrl.text = suggestion;
-                        _search(suggestion);
-                      },
-                      child: Ink(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 11,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryLight,
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: AppColors.primary.withValues(alpha: 0.12),
-                          ),
-                        ),
-                        child: Text(
-                          suggestion,
-                          style: const TextStyle(
-                            color: AppColors.primary,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+        Reveal(
+          delayMs: 40,
+          child: SubtleGlassSurface(
+            padding: const EdgeInsets.all(18),
+            borderRadius: BorderRadius.circular(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF7E8),
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                    );
-                  }).toList(),
+                      child: const Icon(
+                        Icons.auto_awesome_rounded,
+                        color: AppColors.amber,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Goi y tim kiem',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textDark,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Chon nhanh mot tu khoa de bat dau',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: AppColors.textGray,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-            ],
+                const SizedBox(height: 16),
+                if (_loadingSuggestions)
+                  const LinearProgressIndicator(
+                    color: AppColors.primary,
+                    minHeight: 3,
+                  )
+                else
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: suggestions.map((suggestion) {
+                      return InkWell(
+                        borderRadius: BorderRadius.circular(999),
+                        onTap: () {
+                          _ctrl.text = suggestion;
+                          _search(suggestion);
+                        },
+                        child: Ink(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 11,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryLight,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.12),
+                            ),
+                          ),
+                          child: Text(
+                            suggestion,
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 18),
         if (_recommendedProducts.isNotEmpty) ...[
-          _buildRecommendationRail(),
+          Reveal(delayMs: 80, child: _buildRecommendationRail()),
           const SizedBox(height: 18),
         ],
-        _buildIdeaTile(
-          icon: Icons.menu_book_rounded,
-          iconColor: AppColors.primary,
-          title: 'Tai lieu hoc tap',
-          subtitle: 'Giao trinh, sach tham khao va de cuong',
-          badge: 'Pho bien',
+        Reveal(
+          delayMs: 120,
+          child: _buildIdeaTile(
+            icon: Icons.menu_book_rounded,
+            iconColor: AppColors.primary,
+            title: 'Tai lieu hoc tap',
+            subtitle: 'Giao trinh, sach tham khao va de cuong',
+            badge: 'Pho bien',
+          ),
         ),
         const SizedBox(height: 12),
-        _buildIdeaTile(
-          icon: Icons.calculate_rounded,
-          iconColor: AppColors.blue,
-          title: 'May tinh va thiet bi',
-          subtitle: 'Casio, laptop, phu kien hoc tap',
-          badge: 'Moi',
+        Reveal(
+          delayMs: 160,
+          child: _buildIdeaTile(
+            icon: Icons.calculate_rounded,
+            iconColor: AppColors.blue,
+            title: 'May tinh va thiet bi',
+            subtitle: 'Casio, laptop, phu kien hoc tap',
+            badge: 'Moi',
+          ),
         ),
       ],
     );
   }
 
   Widget _buildRecommendationRail() {
-    return Container(
+    return SubtleGlassSurface(
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+      borderRadius: BorderRadius.circular(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -410,13 +401,9 @@ class _SearchScreenState extends State<SearchScreen> {
     required String subtitle,
     required String badge,
   }) {
-    return Container(
+    return SubtleGlassSurface(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
+      borderRadius: BorderRadius.circular(18),
       child: Row(
         children: [
           Container(
@@ -501,19 +488,9 @@ class _SearchScreenState extends State<SearchScreen> {
       key: const ValueKey('empty'),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 28),
-        child: Container(
+        child: SubtleGlassSurface(
           padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 18,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
+          borderRadius: BorderRadius.circular(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -564,13 +541,9 @@ class _SearchScreenState extends State<SearchScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
-          child: Container(
+          child: SubtleGlassSurface(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
+            borderRadius: BorderRadius.circular(18),
             child: Row(
               children: [
                 const Icon(
