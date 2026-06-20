@@ -7,6 +7,7 @@ import '../models/app_notification.dart';
 import '../models/cart_item.dart';
 import '../models/chat_conversation.dart';
 import '../models/chat_message.dart';
+import '../models/expense_record.dart';
 import '../models/product.dart';
 import '../models/purchase_record.dart';
 import '../models/user_profile.dart';
@@ -47,6 +48,8 @@ class FirebaseDataService {
       _firestore.collection('walletRequests');
   CollectionReference<Map<String, dynamic>> get _bankTransactions =>
       _firestore.collection('bankTransactions');
+  CollectionReference<Map<String, dynamic>> get _expenseRecords =>
+      _firestore.collection('expenseRecords');
 
   String? get currentUserId => _auth.currentUser?.uid;
 
@@ -163,6 +166,74 @@ class FirebaseDataService {
       return requests;
     } on FirebaseException catch (error) {
       if (error.code == 'permission-denied') return [];
+      rethrow;
+    }
+  }
+
+  Future<List<ExpenseRecord>> getCurrentUserExpenseRecords() async {
+    final user = _auth.currentUser;
+    if (user == null) return [];
+
+    try {
+      final snapshot = await _expenseRecords
+          .where('userUid', isEqualTo: user.uid)
+          .get();
+      final records = snapshot.docs
+          .map((doc) => ExpenseRecord.fromMap({'id': doc.id, ...doc.data()}))
+          .toList();
+      records.sort((a, b) => b.occurredAt.compareTo(a.occurredAt));
+      return records;
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') return [];
+      rethrow;
+    }
+  }
+
+  Future<ExpenseRecord?> addExpenseRecord({
+    required String title,
+    required String category,
+    required String type,
+    required double amount,
+    String note = '',
+    DateTime? occurredAt,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null || amount <= 0 || title.trim().isEmpty) return null;
+
+    final doc = _expenseRecords.doc();
+    final now = DateTime.now();
+    final record = ExpenseRecord(
+      id: doc.id,
+      userUid: user.uid,
+      title: title.trim(),
+      category: category.trim().isEmpty ? 'Khac' : category.trim(),
+      type: type == 'income' ? 'income' : 'expense',
+      amount: amount,
+      note: note.trim(),
+      occurredAt: occurredAt ?? now,
+      createdAt: now,
+    );
+
+    try {
+      await doc.set(record.toFirestore());
+      return record;
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') return null;
+      rethrow;
+    }
+  }
+
+  Future<bool> deleteExpenseRecord(String recordId) async {
+    final user = _auth.currentUser;
+    if (user == null || recordId.trim().isEmpty) return false;
+
+    try {
+      final doc = await _expenseRecords.doc(recordId).get();
+      if (!doc.exists || doc.data()?['userUid'] != user.uid) return false;
+      await _expenseRecords.doc(recordId).delete();
+      return true;
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied') return false;
       rethrow;
     }
   }
@@ -1090,10 +1161,6 @@ class FirebaseDataService {
     }
   }
 
-  Future<void> approveWalletDeposit(String requestId) async {
-    await _completeWalletDeposit(requestId, autoConfirmed: false);
-  }
-
   Future<bool> autoConfirmWalletDepositFromBankTransaction(
     String requestId,
   ) async {
@@ -1167,7 +1234,9 @@ class FirebaseDataService {
     double creditedAmount = 0;
 
     try {
-      final completed = await _firestore.runTransaction<bool>((transaction) async {
+      final completed = await _firestore.runTransaction<bool>((
+        transaction,
+      ) async {
         final requestDoc = _walletRequests.doc(requestId);
         final snapshot = await transaction.get(requestDoc);
         final data = snapshot.data();

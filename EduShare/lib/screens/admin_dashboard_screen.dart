@@ -60,11 +60,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final awaitingRelease = _orders
         .where((order) => order.status == 'delivered_pending_release')
         .toList();
-    final pendingDeposits = _walletRequests
-        .where(
-          (request) => request.type == 'deposit' && request.status == 'pending',
-        )
-        .toList();
     final pendingWithdrawals = _walletRequests
         .where(
           (request) =>
@@ -90,7 +85,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 padding: const EdgeInsets.all(16),
                 children: [
                   _heroCard(
-                    pendingDeposits.length,
                     pendingWithdrawals.length,
                     awaitingShipment.length,
                     awaitingRelease.length,
@@ -123,10 +117,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     children: [
                       Expanded(
                         child: _metricTile(
-                          'Nap tien',
-                          '${pendingDeposits.length}',
-                          Icons.south_west_rounded,
-                          AppColors.amber,
+                          'Cho giao',
+                          '${awaitingShipment.length}',
+                          Icons.local_shipping_outlined,
+                          AppColors.blue,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -140,22 +134,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  _sectionTitle('Yeu cau nap tien vao vi'),
-                  if (pendingDeposits.isEmpty)
-                    _emptyTile('Khong co yeu cau nap tien nao dang cho xu ly.')
-                  else
-                    ...pendingDeposits.map(
-                      (request) => _walletRequestCard(
-                        request,
-                        actionLabel:
-                            'Cong ${Formatter.price(request.creditedAmount)} vao vi',
-                        actionColor: AppColors.primary,
-                        onTap: () => _runAdminAction(
-                          () => _dataService.approveWalletDeposit(request.id),
-                        ),
-                      ),
-                    ),
                   const SizedBox(height: 16),
                   _sectionTitle('Yeu cau rut tien tu vi'),
                   if (pendingWithdrawals.isEmpty)
@@ -243,7 +221,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _heroCard(
-    int pendingDeposits,
     int pendingWithdrawals,
     int awaitingShipment,
     int awaitingRelease,
@@ -271,7 +248,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Admin duyet nap tien, xu ly rut tien va cong 95% doanh thu vao vi EduShare cua seller khi don da giao xong.',
+            'Admin xu ly rut tien, giao hang va cong 95% doanh thu vao vi EduShare cua seller khi don da giao xong.',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.88),
               fontSize: 13,
@@ -283,7 +260,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             spacing: 10,
             runSpacing: 10,
             children: [
-              _heroBadge('Nap tien', '$pendingDeposits'),
               _heroBadge('Rut tien', '$pendingWithdrawals'),
               _heroBadge('Cho giao', '$awaitingShipment'),
               _heroBadge('Cho cong vi', '$awaitingRelease'),

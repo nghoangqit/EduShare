@@ -16,6 +16,7 @@ import '../utils/helpers.dart';
 import 'admin_dashboard_screen.dart';
 import 'chat_list_screen.dart';
 import 'chat_screen.dart';
+import 'expense_manager_screen.dart';
 import 'product_collection_screen.dart';
 import 'purchase_history_screen.dart';
 
@@ -704,6 +705,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _openExpenseManager,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.white,
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.45)),
+                minimumSize: const Size.fromHeight(48),
+              ),
+              icon: const Icon(Icons.insights_rounded),
+              label: const Text('Quan ly chi tieu'),
+            ),
           ),
         ],
       ),
@@ -1521,6 +1536,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           loader: _dataService.getFavoriteProducts,
         ),
       ),
+    );
+    _loadProfile();
+  }
+
+  Future<void> _openExpenseManager() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ExpenseManagerScreen()),
     );
     _loadProfile();
   }
